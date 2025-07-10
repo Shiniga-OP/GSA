@@ -611,12 +611,12 @@ function buscaFeixe(modelo, inicio, fim, maxComprimento, raioTam, temperatura=1.
                 }
             }
         }
-        if(feixe.every(h => h.finalizada)) {
+        if(feixe.every(o => o.finalizada)) {
             completas.push(...feixe);
             break;
         }
     }
-    completas.push(...feixe.filter(h => !h.finalizada));
+    completas.push(...feixe.filter(o => !o.finalizada));
     if(completas.length>0) {
         completas.sort((a, b) => b.pontuacao-a.pontuacao);
         return completas[0].sequencia;
@@ -642,17 +642,17 @@ class CamadaAtencao {
     this.dimModelo = dimModelo;
     this.numCabecas = numCabecas;
     this.dimCabeca = Math.floor(dimModelo / numCabecas);
-    this.lr = taxaAprendizado;
+    this.taxa = taxaAprendizado;
 
-    this.wq = iniPesosXavier(dimModelo, dimModelo);
-    this.wk = iniPesosXavier(dimModelo, dimModelo);
-    this.wv = iniPesosXavier(dimModelo, dimModelo);
-    this.wo = iniPesosXavier(dimModelo, dimModelo);
+    this.pq = iniPesosXavier(dimModelo, dimModelo);
+    this.pk = iniPesosXavier(dimModelo, dimModelo);
+    this.pv = iniPesosXavier(dimModelo, dimModelo);
+    this.ps = iniPesosXavier(dimModelo, dimModelo);
 
     this.bq = zeros(dimModelo);
     this.bk = zeros(dimModelo);
     this.bv = zeros(dimModelo);
-    this.bo = zeros(dimModelo);
+    this.bs = zeros(dimModelo);
 
     // buffers de cache para o backward
     this.cache = {};
@@ -666,42 +666,42 @@ class CamadaAtencao {
         if(!isFinite(v) || isNaN(v)) throw new Error(`input x inválido em [${i}][${j}] = ${v}`);
       }
     }
-    for(let i=0; i<this.wq.length; i++) {
-      for(let j=0; j<this.wq[i].length; j++) {
-        const v = this.wq[i][j];
-        if(!isFinite(v) || isNaN(v)) throw new Error(`wq inválido em [${i}][${j}] = ${v}`);
+    for(let i=0; i<this.pq.length; i++) {
+      for(let j=0; j<this.pq[i].length; j++) {
+        const v = this.pq[i][j];
+        if(!isFinite(v) || isNaN(v)) throw new Error(`pq inválido em [${i}][${j}] = ${v}`);
       }
     }
     const seqTam = x.length;
-    const q = x.map(seq => somarVetores(aplicarMatriz(this.wq, seq), this.bq));
+    const q = x.map(seq => somarVetores(aplicarMatriz(this.pq, seq), this.bq));
     q.forEach((vec, i) => {
       vec.forEach((v, j) => {
         if(!isFinite(v)) throw new Error(`Q com NaN em [${i}][${j}] = ${v}`);
       });
     });
-    const k = x.map(seq => somarVetores(aplicarMatriz(this.wk, seq), this.bk));
-    const v = x.map(seq => somarVetores(aplicarMatriz(this.wv, seq), this.bv));
+    const k = x.map(seq => somarVetores(aplicarMatriz(this.pk, seq), this.bk));
+    const v = x.map(seq => somarVetores(aplicarMatriz(this.pv, seq), this.bv));
 
-    const qCab = this._splitHeads(q);
-    const kCab = this._splitHeads(k);
-    const vCab = this._splitHeads(v);
+    const qCab = this.dividirCabecas(q);
+    const kCab = this.dividirCabecas(k);
+    const vCab = this.dividirCabecas(v);
 
-    const scoresHeads = [];
-    const pesosHeads = [];
+    const pontosCabecas = [];
+    const pCabecas = [];
 
-    for(let h=0; h<this.numCabecas; h++) {
-      const qh = qCab[h];
-      const kh = kCab[h];
+    for(let o=0; o<this.numCabecas; o++) {
+      const qo = qCab[o];
+      const ko = kCab[o];
       const ponto = [];
-      for(let i=0; i<qh.length; i++) {
-        for(let j=0; j<qh[i].length; j++) {
-          const vq = qh[i][j], vk = kh[i][j];
-          if(!isFinite(vq) || !isFinite(vk)) throw new Error(`Qh ou Kh contém valor inválido em head ${h}, pos ${i}, dim ${j}: ${vq}, ${vk}`);
+      for(let i=0; i<qo.length; i++) {
+        for(let j=0; j<qo[i].length; j++) {
+          const vq = qo[i][j], vk = ko[i][j];
+          if(!isFinite(vq) || !isFinite(vk)) throw new Error(`qo ou ko contém valor inválido em cabeca ${o}, pos ${i}, dim ${j}: ${vq}, ${vk}`);
         }
       }
       for(let i=0; i<seqTam; i++) {
         ponto[i] = [];
-        for(let j=0; j<seqTam; j++) ponto[i][j] = escalarDot(qh[i], kh[j]) / Math.sqrt(this.dimCabeca);
+        for(let j=0; j<seqTam; j++) ponto[i][j] = escalarDot(qo[i], ko[j]) / Math.sqrt(this.dimCabeca);
       }
       if(mascara) {
         for(let i=0; i<seqTam; i++) {
@@ -709,28 +709,28 @@ class CamadaAtencao {
             if(!mascara[i][j]) ponto[i][j] = -1e9;
         }
       }
-      scoresHeads[h] = ponto;
-      pesosHeads[h] = ponto.map(linha => softmax(linha));
+      pontosCabecas[o] = ponto;
+      pCabecas[o] = ponto.map(linha => softmax(linha));
     }
     
-    const atSCabecas = pesosHeads.map((pw, h) => {
-      const vh = vCab[h];
-      return vh.map((_, i) => {
+    const atSCabecas = pCabecas.map((pp, o) => {
+      const vo = vCab[o];
+      return vo.map((_, i) => {
         let ctx = zeros(this.dimCabeca);
         for(let j=0; j<seqTam; j++) {
-          const mult = pw[i][j];
-          const contrib = vh[j].map(vij => vij*mult);
+          const mult = pp[i][j];
+          const contrib = vo[j].map(vij => vij*mult);
           ctx = somarVetores(ctx, contrib);
         }
         return ctx;
       });
     });
 
-    const concat = this._concatHeads(atSCabecas);
-    const o = concat.map(seq => somarVetores(aplicarMatriz(this.wo, seq), this.bo));
+    const juntar = this.juntarCabecas(atSCabecas);
+    const o = juntar.map(seq => somarVetores(aplicarMatriz(this.ps, seq), this.bs));
 
     // salvar cache
-    this.cache = { x, qCab, kCab, vCab, pesosHeads, concat };
+    this.cache = { x, qCab, kCab, vCab, pCabecas, juntar };
     for(let i = 0; i<o.length; i++) {
       for(let j = 0; j<o[i].length; j++) {
         const v = o[i][j];
@@ -741,127 +741,127 @@ class CamadaAtencao {
   }
 
   retropropagar(dO) {
-    const { x, qCab, kCab, vCab, pesosHeads, concat } = this.cache;
-    const seqLen = x.length;
+    const { x, qCab, kCab, vCab, pCabecas, juntar } = this.cache;
+    const seqTam = x.length;
     // dConcat = dO · Wo^T
-    const dWoT = transpor(this.wo);
+    const dWoT = transpor(this.ps);
     const dConcat = dO.map(do_i => aplicarMatriz(dWoT, do_i));
-    // gradientes de wo e bo
-    let dWo = multMatrizes(transpor(concat), dO);
+    // gradientes de ps e bs
+    let dPs = multMatrizes(transpor(juntar), dO);
     let dBo = dO.reduce((s, v) => somarVetores(s, v), zeros(this.dimModelo));
-    // split dConcat nos heads
-    const dAttnHeads = this._splitHeads(dConcat);
+    // split dConcat nos cabecas
+    const dAtCabecas = this.dividirCabecas(dConcat);
     // inicia os grads
-    let dWq = matrizZeros(this.dimModelo, this.dimModelo);
-    let dWk = matrizZeros(this.dimModelo, this.dimModelo);
-    let dWv = matrizZeros(this.dimModelo, this.dimModelo);
+    let dPq = matrizZeros(this.dimModelo, this.dimModelo);
+    let dPk = matrizZeros(this.dimModelo, this.dimModelo);
+    let dPv = matrizZeros(this.dimModelo, this.dimModelo);
     let dBq = zeros(this.dimModelo);
     let dBk = zeros(this.dimModelo);
     let dBv = zeros(this.dimModelo);
-    // prepara espaço para dKh e dVh
-    const dKhAll = tensor3D(this.numCabecas, seqLen, this.dimCabeca, 0);
-    const dVhAll = tensor3D(this.numCabecas, seqLen, this.dimCabeca, 0);
-    const dX = matriz(seqLen, this.dimModelo);
+    // prepara espaço para dko e dVh
+    const dkoTodo = tensor3D(this.numCabecas, seqTam, this.dimCabeca, 0);
+    const dVhAll = tensor3D(this.numCabecas, seqTam, this.dimCabeca, 0);
+    const dX = matriz(seqTam, this.dimModelo);
 
-    for(let h=0; h<this.numCabecas; h++) {
-      const qh = qCab[h], kh = kCab[h], vh = vCab[h], ph = pesosHeads[h], dAh = dAttnHeads[h];
-      // dPH = dAh*Vh
-      const dPH = ph.map((_, i) => {
+    for(let o=0; o<this.numCabecas; o++) {
+      const qo = qCab[o], ko = kCab[o], vo = vCab[o], po = pCabecas[o], dAh = dAtCabecas[o];
+      // dPO = dAh*Vh
+      const dPO = po.map((_, i) => {
         let soma = zeros(this.dimCabeca);
-        for(let j=0; j<seqLen; j++) {
+        for(let j=0; j<seqTam; j++) {
           const mult = dAh[i][j];
           for(let k=0; k<this.dimCabeca; k++) {
-            soma[k] += vh[j][k]*mult;
+            soma[k] += vo[j][k]*mult;
           }
         }
         return soma;
       });
-      // dScores = derivada softmax^T * dPH
-      const dScores = ph.map((row, i) => derivadaSoftmax(row, dPH[i]));
-      // atualizar dX, dKhAll e dVhAll
+      // dPontos = derivada softmax^T * dPO
+      const dPontos = po.map((linha, i) => derivadaSoftmax(linha, dPO[i]));
+      // atualizar dX, dkoTodo e dVhAll
       const invSqrt = 1/Math.sqrt(this.dimCabeca);
-      for(let i=0; i<seqLen; i++) {
-        for(let j=0; j<seqLen; j++) {
-          const grad = dScores[i][j]*invSqrt;
+      for(let i=0; i<seqTam; i++) {
+        for(let j=0; j<seqTam; j++) {
+          const grad = dPontos[i][j]*invSqrt;
           // dX
-          const start = h*this.dimCabeca;
+          const inicio = o*this.dimCabeca;
           for(let k=0; k<this.dimCabeca; k++) {
-            dX[i][start + k] += kh[j][k]*grad;
+            dX[i][inicio + k] += ko[j][k]*grad;
           }
-          // dKhAll
+          // dkoTodo
           for(let k=0; k<this.dimCabeca; k++) {
-            dKhAll[h][j][k] += qh[i][k]*grad;
+            dkoTodo[o][j][k] += qo[i][k]*grad;
           }
         }
       }
       // dVhAll
-      for(let i=0; i<seqLen; i++) {
-        for(let j=0; j<seqLen; j++) {
-          const peso = ph[i][j]*dAh[i][j];
+      for(let i=0; i<seqTam; i++) {
+        for(let j=0; j<seqTam; j++) {
+          const peso = po[i][j]*dAh[i][j];
           if(peso != 0) {
             const contrib = Array(this.dimCabeca).fill(peso);
-            dVhAll[h][j] = somarVetores(dVhAll[h][j], contrib);
+            dVhAll[o][j] = somarVetores(dVhAll[o][j], contrib);
           }
         }
       }
       // prepara matrizes para gradientes de pesos
       const xMat = transpor(x);
-      const qHeadFlat = transpor(qh);
-      const kHeadFlat = transpor(dKhAll[h]);
-      const vHeadFlat = transpor(dVhAll[h]);
-      const base = h*this.dimCabeca;
+      const qCabecaPlana = transpor(qo);
+      const kCabecaPlana = transpor(dkoTodo[o]);
+      const vCabecaPlana = transpor(dVhAll[o]);
+      const base = o*this.dimCabeca;
       // valida entradas
-      for(let idc=0; idc<qHeadFlat.length; idc++) {
-        if(qHeadFlat[idc].some(v => !isFinite(v))) throw new Error(`qHeadFlat corrompido`);
+      for(let idc=0; idc<qCabecaPlana.length; idc++) {
+        if(qCabecaPlana[idc].some(v => !isFinite(v))) throw new Error(`qCabecaPlana corrompido`);
       }
       for(let idc=0; idc<xMat.length; idc++) {
         if(xMat[idc].some(v => !isFinite(v))) throw new Error(`xMat corrompido`);
       }
-      // gradientes Wq, Wk, Wv, Bq, Bk, Bv
+      // gradientes
       for(let i=0; i<this.dimCabeca; i++) {
-        const lwq = multMatrizVetor(xMat, qHeadFlat[i]);
-        const lwk = multMatrizVetor(xMat, kHeadFlat[i]);
-        const lwv = multMatrizVetor(xMat, vHeadFlat[i]);
-        dWq[base+i] = somarVetores(dWq[base+i], lwq);
-        dWk[base+i] = somarVetores(dWk[base+i], lwk);
-        dWv[base+i] = somarVetores(dWv[base+i], lwv);
-        dBq[base+i] += qHeadFlat[i].reduce((s, v) => s+v, 0);
-        dBk[base+i] += kHeadFlat[i].reduce((s, v) => s+v, 0);
-        dBv[base+i] += vHeadFlat[i].reduce((s, v) => s+v, 0);
+        const lpq = multMatrizVetor(xMat, qCabecaPlana[i]);
+        const lpk = multMatrizVetor(xMat, kCabecaPlana[i]);
+        const lpv = multMatrizVetor(xMat, vCabecaPlana[i]);
+        dPq[base+i] = somarVetores(dPq[base+i], lpq);
+        dPk[base+i] = somarVetores(dPk[base+i], lpk);
+        dPv[base+i] = somarVetores(dPv[base+i], lpv);
+        dBq[base+i] += qCabecaPlana[i].reduce((s, v) => s+v, 0);
+        dBk[base+i] += kCabecaPlana[i].reduce((s, v) => s+v, 0);
+        dBv[base+i] += vCabecaPlana[i].reduce((s, v) => s+v, 0);
       }
     }
     // recorte
-    dWo = clipMatriz(dWo, 1.0);
+    dPs = clipMatriz(dPs, 1.0);
     dBo = clipVetor(dBo, 1.0);
-    dWq = clipMatriz(dWq, 1.0);
+    dPq = clipMatriz(dPq, 1.0);
     dBq = clipVetor(dBq, 1.0);
-    dWk = clipMatriz(dWk, 1.0);
+    dPk = clipMatriz(dPk, 1.0);
     dBk = clipVetor(dBk, 1.0);
-    dWv = clipMatriz(dWv, 1.0);
+    dPv = clipMatriz(dPv, 1.0);
     dBv = clipVetor(dBv, 1.0);
     // aplica atualizações ignorando NaNs
-    this.wo = attPesos(this.wo, dWo, this.lr);
-    this.bo = this.bo.map((b, i) => isFinite(dBo[i]) ? b-this.lr*dBo[i] : b);
-    this.wq = attPesos(this.wq, dWq, this.lr);
-    this.bq = this.bq.map((b, i) => isFinite(dBq[i]) ? b-this.lr*dBq[i] : b);
-    this.wk = attPesos(this.wk, dWk, this.lr);
-    this.bk = this.bk.map((b, i) => isFinite(dBk[i]) ? b-this.lr*dBk[i] : b);
-    this.wv = attPesos(this.wv, dWv, this.lr);
-    this.bv = this.bv.map((b, i) => isFinite(dBv[i]) ? b-this.lr*dBv[i] : b);
+    this.ps = attPesos(this.ps, dPs, this.taxa);
+    this.bs = this.bs.map((b, i) => isFinite(dBo[i]) ? b-this.taxa*dBo[i] : b);
+    this.pq = attPesos(this.pq, dPq, this.taxa);
+    this.bq = this.bq.map((b, i) => isFinite(dBq[i]) ? b-this.taxa*dBq[i] : b);
+    this.pk = attPesos(this.pk, dPk, this.taxa);
+    this.bk = this.bk.map((b, i) => isFinite(dBk[i]) ? b-this.taxa*dBk[i] : b);
+    this.pv = attPesos(this.pv, dPv, this.taxa);
+    this.bv = this.bv.map((b, i) => isFinite(dBv[i]) ? b-this.taxa*dBv[i] : b);
     return dX;
   }
   
-  _splitHeads(x) {
-    const heads = [];
-    for(let h=0; h<this.numCabecas; h++) {
-      heads[h] = x.map(seq => seq.slice(h*this.dimCabeca, (h+1)*this.dimCabeca));
+  dividirCabecas(x) {
+    const cabecas = [];
+    for(let o=0; o<this.numCabecas; o++) {
+      cabecas[o] = x.map(seq => seq.slice(o*this.dimCabeca, (o+1)*this.dimCabeca));
     }
-    return heads;
+    return cabecas;
   }
 
-  _concatHeads(heads) {
-    return heads[0].map((_, i) =>
-      heads.reduce((seq, h) => seq.concat(h[i]), [])
+  juntarCabecas(cabecas) {
+    return cabecas[0].map((_, i) =>
+      cabecas.reduce((seq, o) => seq.concat(o[i]), [])
     );
   }
 }
@@ -872,7 +872,7 @@ class CamadaFFN {
     this.b1 = zeros(dimFFN);
     this.w2 = iniPesosXavier(dimModelo, dimFFN);
     this.b2 = zeros(dimModelo);
-    this.lr = taxaAprendizado;
+    this.taxa = taxaAprendizado;
     this.cache = {};
   }
   propagar(x) {
@@ -943,14 +943,14 @@ class CamadaFFN {
     // RETROPROPAGAÇÃO:
     for(let n=0; n<batch; n++) {
       const seqX  = x[n];
-      const seqH1 = camada1[n]; // saída ReLU
+      const seqo1 = camada1[n]; // saída ReLU
       const seqDY = dY[n];
-      // checa seqX, seqH1, seqDY
+      // checa seqX, seqo1, seqDY
       if(!Array.isArray(seqX) || seqX.length != dimEntrada) throw new Error(`x[${n}] inválido`);
       if(seqX.some(v => typeof v !== "number" || !isFinite(v))) throw new Error(`x[${n}] contém valor inválido`);
       
-      if(!Array.isArray(seqH1) || seqH1.length != dimFFN) throw new Error(`camada1[${n}] inválido`);
-      if(seqH1.some(v => typeof v != "number" || !isFinite(v))) throw new Error(`camada1[${n}] contém valor inválido`);
+      if(!Array.isArray(seqo1) || seqo1.length != dimFFN) throw new Error(`camada1[${n}] inválido`);
+      if(seqo1.some(v => typeof v != "number" || !isFinite(v))) throw new Error(`camada1[${n}] contém valor inválido`);
       if(!Array.isArray(seqDY) || seqDY.length != dimSaida) throw new Error(`dY[${n}] inválido`);
       if(seqDY.some(v => typeof v != "number" || !isFinite(v))) throw new Error(`dY[${n}] contém valor inválido`);
       // gradientes da camada de saída
@@ -958,14 +958,14 @@ class CamadaFFN {
         const err = seqDY[j];
         dB2[j] += err;
         for(let k=0; k<dimFFN; k++) {
-          dW2[j][k] += seqH1[k]*err;
+          dW2[j][k] += seqo1[k]*err;
         }
       }
       // retropropagação na camada de saída
       const W2T = transpor(this.w2); // [dimFFN][dimSaida]
       const dh = aplicarMatriz(W2T, seqDY);
       for(let k=0; k<dimFFN; k++) {
-        const deriv = seqH1[k]>0 ? 1 : 0; // derivada ReLU
+        const deriv = seqo1[k]>0 ? 1 : 0; // derivada ReLU
         dh[k] = dh[k]*deriv;
       }
       // gradientes da primeira camada
@@ -980,10 +980,10 @@ class CamadaFFN {
       dX[n] = aplicarMatriz(W1T, dh);
     }
     // ATUALIZAÇÃO DOS PESOS:
-    this.w2 = attPesos(this.w2, dW2, this.lr);
-    this.b2 = this.b2.map((b,j) => b-this.lr*dB2[j]);
-    this.w1 = attPesos(this.w1, dW1, this.lr);
-    this.b1 = this.b1.map((b,j) => b-this.lr*dB1[j]);
+    this.w2 = attPesos(this.w2, dW2, this.taxa);
+    this.b2 = this.b2.map((b,j) => b-this.taxa*dB2[j]);
+    this.w1 = attPesos(this.w1, dW1, this.taxa);
+    this.b1 = this.b1.map((b,j) => b-this.taxa*dB1[j]);
     return dX;
   }
 }
@@ -993,7 +993,7 @@ class CamadaNormalizacao {
     this.gamma = uns(dimModelo)
     this.beta = zeros(dimModelo)
     this.epsilon = epsilon
-    this.lr = taxaAprendizado
+    this.taxa = taxaAprendizado
     this.cache = {}
   }
   propagar(x) {
@@ -1054,8 +1054,8 @@ class CamadaNormalizacao {
     }
     dGamma = clip(dGamma, 1.0);
     dBeta = clip(dBeta, 1.0);
-    this.gamma = this.gamma.map((g,j)=>g-this.lr*dGamma[j]);
-    this.beta = this.beta.map((b,j)=>b-this.lr*dBeta[j]);
+    this.gamma = this.gamma.map((g,j)=>g-this.taxa*dGamma[j]);
+    this.beta = this.beta.map((b,j)=>b-this.taxa*dBeta[j]);
     return dX;
   }
 }
@@ -1140,7 +1140,7 @@ class GSATransformer {
     this.numCabecas = numCabecas
     this.dimFFN = dimFFN
     this.seqMaxima = seqMaxima
-    this.lr = taxaAprendizado
+    this.taxa = taxaAprendizado
 
     this.embedding = iniPesosXavier(vocabTam, dimModelo)
     this.codificadorPos = new CodificadorPosicional(dimModelo, seqMaxima)
@@ -1154,14 +1154,14 @@ class GSATransformer {
   }
 
   propagar(tokens) {
-    const seqLen = tokens.length
+    const seqTam = tokens.length
     const xNoPos = tokens.map(t => this.embedding[t])
     const xPos = this.codificadorPos.aplicar(xNoPos)
     let x = xPos;
     
     const saidas = [];
     for(const camada of this.camadas) {
-      x = camada.propagar(x, this.gerarMascaraCausal(seqLen));
+      x = camada.propagar(x, this.gerarMascaraCausal(seqTam));
       saidas.push(clonarMatriz(x));
     }
     const normSaida = this.normFinal.propagar(x);
@@ -1186,18 +1186,18 @@ class GSATransformer {
   retropropagar(dLogits) {
     if(isNaN(dLogits[0][0])) console.error("dLogits[0][0] = NaN");
     const { tokens, xPos, saidas, normSaida } = this.cache;
-    const seqLen = tokens.length;
+    const seqTam = tokens.length;
 
     const dBias = zeros(this.vocabTam);
     for(const dl of dLogits)
     for(let j=0; j<this.vocabTam; j++) dBias[j] += dl[j];
     
     const dCabecaEntrada = dLogits.map(dl => aplicarMatriz(transpor(this.cabecaLM), dl));
-    const dWcab = matrizZeros(this.cabecaLM.length, this.dimModelo);
-    for(let i=0; i<seqLen; i++) {
+    const dPcab = matrizZeros(this.cabecaLM.length, this.dimModelo);
+    for(let i=0; i<seqTam; i++) {
       const inVec = normSaida[i];
       for(let j=0; j<this.vocabTam; j++) {
-        for(let k=0; k<this.dimModelo; k++) dWcab[j][k] += inVec[k]*dLogits[i][j];
+        for(let k=0; k<this.dimModelo; k++) dPcab[j][k] += inVec[k]*dLogits[i][j];
       }
     }
 
@@ -1207,18 +1207,18 @@ class GSATransformer {
     
     for(let i = this.camadas.length-1; i >= 0; i--) {
       const inp = i==0 ? xPos : saidas[i-1];
-      dX = this.camadas[i].retropropagar(dX, this.gerarMascaraCausal(seqLen));
+      dX = this.camadas[i].retropropagar(dX, this.gerarMascaraCausal(seqTam));
     }
 
     const dEmb = matrizZeros(this.embedding.length, this.dimModelo);
-    for(let i=0; i<seqLen; i++) {
+    for(let i=0; i<seqTam; i++) {
       const t = tokens[i];
       dEmb[t] = somarVetores(dEmb[t], dX[i]);
     }
 
-    this.biasCabeca = this.biasCabeca.map((b,i)=> b-this.lr*dBias[i]);
-    this.cabecaLM = attPesos(this.cabecaLM, dWcab, this.lr);
-    this.embedding = attPesos(this.embedding, dEmb, this.lr);
+    this.biasCabeca = this.biasCabeca.map((b,i)=> b-this.taxa*dBias[i]);
+    this.cabecaLM = attPesos(this.cabecaLM, dPcab, this.taxa);
+    this.embedding = attPesos(this.embedding, dEmb, this.taxa);
   }
 
   gerarMascaraCausal(n) {
@@ -1232,7 +1232,6 @@ class GSATransformer {
   
   gerar(prompt, maxTokens=50, temperatura=0.8) {
     let tokens = [...prompt];
-    
     for(let i=0; i<maxTokens; i++) {
       const logits = this.propagar(tokens);
       const ultimosLogits = logits[logits.length-1];
@@ -1241,21 +1240,17 @@ class GSATransformer {
       const proximoToken = this.sampleProb(probs);
       
       tokens.push(proximoToken);
-      
-      if(tokens.length >= this.seqMaxima) {
-        break;
-      }
+      if(tokens.length >= this.seqMaxima) break;
     }
     return tokens;
   }
   
   sampleProb(probs) {
-    const rand = Math.random();
+    const raio = Math.random();
     let soma = 0;
-    
     for(let i=0; i<probs.length; i++) {
       soma += probs[i];
-      if(rand<soma) return i;
+      if(raio<soma) return i;
     }
     return probs.length-1;
   }
@@ -1386,7 +1381,7 @@ class TreinadorGSA {
   constructor(modelo, taxaAprendizado=0.0001) {
     this.modelo = modelo;
     this.epocas;
-    this.modelo.lr = taxaAprendizado;
+    this.modelo.taxa = taxaAprendizado;
     this.historico = [];
   }
   treinar(dados, epocas=10, tamanhoLote=8) {
@@ -1403,18 +1398,18 @@ class TreinadorGSA {
       }
       const perdaMedia = perdaEpoca/numLotes;
       this.historico.push(perdaMedia);
-      console.log(`Época ${epoca+1}/${epocas} | Perda média: ${perdaMedia.toFixed(4)} | Taxa: ${this.modelo.lr}`);
+      console.log(`Época ${epoca+1}/${epocas} | Perda média: ${perdaMedia.toFixed(4)} | Taxa: ${this.modelo.taxa}`);
       if(epoca % 10==0) {
         console.log("Amostra \"olá\": ", gsa.gerar("olá", 20, 0.6))
       }
       if(epoca>0) {
         let perdaAntiga = this.historico[epoca-1];
         if(perdaMedia>perdaAntiga*1.02) { // perda>2%
-        this.modelo.lr *= 0.7; // reduz 30%
-        console.log(`[TAXA][Redução]: ${this.modelo.lr.toFixed(4)}`);
+        this.modelo.taxa *= 0.7; // reduz 30%
+        console.log(`[TAXA][Redução]: ${this.modelo.taxa.toFixed(4)}`);
         } else if (perdaMedia < perdaAntiga*0.98) {
-          this.modelo.lr *= 1.05; // aumenta 5%
-          if(this.modelo.lr>0.01) this.modelo.lr = 0.01;
+          this.modelo.taxa *= 1.05; // aumenta 5%
+          if(this.modelo.taxa>0.01) this.modelo.taxa = 0.01;
         }
       }
     }
@@ -1550,13 +1545,13 @@ function prepararDados(texto, tokenizador, seqTam=32) {
 
 function obterParams() {
   const emb = gsa.modelo.vocabTam*gsa.modelo.dimModelo; // embedding
-  const headFinal = gsa.modelo.vocabTam*gsa.modelo.dimModelo // cabecaLM
+  const cabecaFinal = gsa.modelo.vocabTam*gsa.modelo.dimModelo // cabecaLM
   +gsa.modelo.vocabTam; // biasCabeca
   const porBloco = 
-  // atenção: Wq, Wk, Wv, Wo+bias de cada uma
+  // atenção: pq, pk, pv, ps+bias de cada uma
   4*gsa.modelo.dimModelo*gsa.modelo.dimModelo
   +4*gsa.modelo.dimModelo
-  // FFN: W1, W2 + b1, b2
+  // FFN: p1, p2 + b1, b2
   +gsa.modelo.dimFFN*gsa.modelo.dimModelo
   +gsa.modelo.dimModelo*gsa.modelo.dimFFN
   +gsa.modelo.dimFFN
@@ -1565,7 +1560,7 @@ function obterParams() {
   +2*(gsa.modelo.dimModelo+gsa.modelo.dimModelo);
   const totalTransformer = gsa.modelo.numCamadas*porBloco;
   
-  return emb+headFinal+totalTransformer;
+  return emb+cabecaFinal+totalTransformer;
 }
 
 function avaliarModelo(gsa, perguntasTeste) {
@@ -1655,7 +1650,7 @@ function treinarNovo() {
   console.log(`  Dimensão FFN: ${gsa.modelo.dimFFN}`);
   console.log(`  Sequência máxima: ${gsa.modelo.seqMaxima}`);
   console.log(`  Épocas: ${gsa.treinador.epocas}`);
-  console.log(`  Taxa de aprendizado: ${gsa.modelo.lr}`);
+  console.log(`  Taxa de aprendizado: ${gsa.modelo.taxa}`);
   
   console.log('  ★Parâmetros estimados★:', obterParams());
   
@@ -1715,8 +1710,8 @@ function salvar(gsa, caminhoArquivo) {
     
     for(const bloco of gsa.modelo.camadas) {
       // atenção
-      totalFloats += 4*(gsa.modelo.dimModelo*gsa.modelo.dimModelo); // wq, wk, wv, wo
-      totalFloats += 4*gsa.modelo.dimModelo; // bq, bk, bv, bo
+      totalFloats += 4*(gsa.modelo.dimModelo*gsa.modelo.dimModelo); // pq, pk, pv, ps
+      totalFloats += 4*gsa.modelo.dimModelo; // bq, bk, bv, bs
       // FFN
       totalFloats += gsa.modelo.dimFFN*gsa.modelo.dimModelo; // w1
       totalFloats += gsa.modelo.dimFFN; // b1
@@ -1782,15 +1777,15 @@ function salvar(gsa, caminhoArquivo) {
     // camadas
     for(const bloco of gsa.modelo.camadas) {
         // atenção
-        salvarMatriz(bloco.atencao.wq);
-        salvarMatriz(bloco.atencao.wk);
-        salvarMatriz(bloco.atencao.wv);
-        salvarMatriz(bloco.atencao.wo);
+        salvarMatriz(bloco.atencao.pq);
+        salvarMatriz(bloco.atencao.pk);
+        salvarMatriz(bloco.atencao.pv);
+        salvarMatriz(bloco.atencao.ps);
         
         salvarVetor(bloco.atencao.bq);
         salvarVetor(bloco.atencao.bk);
         salvarVetor(bloco.atencao.bv);
-        salvarVetor(bloco.atencao.bo);
+        salvarVetor(bloco.atencao.bs);
         
         // FFN
         salvarMatriz(bloco.ffn.w1);
@@ -1880,15 +1875,15 @@ function carregar(caminhoArquivo) {
     for(let i=0; i<leitor.numCamadas; i++) {
         const bloco = modelo.camadas[i];
         // atenção
-        bloco.atencao.wq = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
-        bloco.atencao.wk = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
-        bloco.atencao.wv = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
-        bloco.atencao.wo = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
+        bloco.atencao.pq = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
+        bloco.atencao.pk = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
+        bloco.atencao.pv = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
+        bloco.atencao.ps = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
         
         bloco.atencao.bq = carregarVetor(leitor.dimModelo);
         bloco.atencao.bk = carregarVetor(leitor.dimModelo);
         bloco.atencao.bv = carregarVetor(leitor.dimModelo);
-        bloco.atencao.bo = carregarVetor(leitor.dimModelo);
+        bloco.atencao.bs = carregarVetor(leitor.dimModelo);
         
         // FFN
         bloco.ffn.w1 = carregarMatriz(leitor.dimFFN, leitor.dimModelo);
@@ -1937,7 +1932,7 @@ function mostrarEstatisticas(gsa) {
   console.log(`  Dimensão FFN: ${gsa.modelo.dimFFN}`);
   console.log(`  Sequência máxima: ${gsa.modelo.seqMaxima}`);
   console.log(`  Épocas: ${gsa.treinador.epocas}`);
-  console.log(`  Taxa de aprendizado: ${gsa.modelo.lr}`);
+  console.log(`  Taxa de aprendizado: ${gsa.modelo.taxa}`);
   console.log('  ★Parâmetros estimados★:', obterParams());
   
   if(gsa.treinador.historico.length>0) {
