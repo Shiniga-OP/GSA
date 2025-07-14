@@ -476,8 +476,7 @@ function vetor(n, escala=0.1) {
 }
 
 function somarVetores(a, b) {
-  if(!a || !b || a.length !== b.length)
-    throw new Error(`[somarVetores]: tamanho incompatível a=${a.length}, b=${b.length}`);
+  if(!a || !b || a.length !== b.length) throw new Error(`[somarVetores]: tamanho incompatível a=${a.length}, b=${b.length}`);
   return a.map((x, i) => x+b[i]);
 }
 
@@ -553,18 +552,30 @@ function arraysIguais(a, b) {
   return JSON.stringify(a)===JSON.stringify(b);
 }
 
-function eNaN(tensor, nome, classe) {
+function eNaN(tensor, nome, classe, parar=true) {
   for(let i=0; i<tensor.length; i++) {
+    if(parar && tensor[0][0]==undefined) {
+        if(isNaN(tensor[i])) throw new Error(`[${classe}] ${nome} contém NaN em [${i}]`);
+        else if(!isFinite(tensor[i])) throw new Error(`[${classe}] ${nome} contém Infinity em [${i}][${j}]`);
+        else if(tensor[i]==undefined) throw new Error(`[${classe}] ${nome} contém Undefined em [${i}]`);
+      } else if(tensor[0][0]==undefined) {
+        if(isNaN(tensor[i])) console.error(`[${classe}] ${nome} contém NaN em [${i}]`);
+        else if(!isFinite(tensor[i])) console.error(`[${classe}] ${nome} contém Infinity em [${i}]`);
+        else if(tensor[i]==undefined) console.error(`[${classe}] ${nome} contém Undefined em [${i}]`);
+      }
     for(let j=0; j<tensor[i].length; j++) {
-      if(isNaN(tensor[i][j]) || !isFinite(tensor[i][j])) {
-        console.error(`[${classe}] ${nome} contém NaN em [${i}][${j}]`);
-        return true;
+      if(parar) {
+        if(isNaN(tensor[i][j])) throw new Error(`[${classe}] ${nome} contém NaN em [${i}][${j}]`);
+        else if(!isFinite(tensor[i][j])) throw new Error(`[${classe}] ${nome} contém Infinity em [${i}][${j}]`);
+        else if(tensor[i][j]==undefined) throw new Error(`[${classe}] ${nome} contém Undefined em [${i}][${j}]`);
+      } else {
+        if(isNaN(tensor[i][j])) console.error(`[${classe}] ${nome} contém NaN em [${i}][${j}]`);
+        else if(!isFinite(tensor[i][j])) console.error(`[${classe}] ${nome} contém Infinity em [${i}][${j}]`);
+        else if(tensor[i][j]==undefined) console.error(`[${classe}] ${nome} contém Undefined em [${i}][${j}]`);
       }
     }
   }
-  return false;
 }
-
 // vetorização:
 function oneHot(i, tam) {
   const v = new Array(tam).fill(0);
@@ -578,8 +589,31 @@ function oneHot(i, tam) {
 function oneHotLote(indices, tamanho) {
   return indices.map(i => oneHot(i, tamanho));
 }
-
 // texto:
+function pesquisar(url, html) {
+  const https = require('https');
+  https.get(url, (res) => {
+    let dados = '';
+    res.on('data', chunk => dados += chunk);
+    res.on('end', () => html(dados));
+  }).on('error', err => {
+    console.error('Erro:', err.message);
+  });
+}
+
+function normalizarTexto(texto) {
+  return texto
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+  .toLowerCase()
+  .replace(/[^\w\s.,!?;:]/g, '') // mantém apenas caracteres válidos
+  .replace(/\s+/g, ' ');
+}
+function tokenizarCtx(texto) {
+  return texto
+    .split(/(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?|\!)\s+/g) // split por sentenças
+    .filter(s => s.trim().length>0);
+}
+
 function buscaFeixe(modelo, inicio, fim, maxComprimento, raioTam, temperatura=1.0, topoK=null) {
     let feixe = [{
         sequencia: [inicio],
@@ -649,18 +683,6 @@ function buscaFeixe(modelo, inicio, fim, maxComprimento, raioTam, temperatura=1.
     return feixe[0].sequencia;
 }
 
-function minMax(m) {
-  let min=Infinity, max=-Infinity;
-  for(let i=0;i<m.length;i++) {
-    for(let j=0;j<m[i].length;j++) {
-      if(m[i][j]<min) min=m[i][j];
-      if(m[i][j]>max) max=m[i][j];
-      if(isNaN(m[i][j])) return "NaN detectado";
-    }
-  }
-  return `min: ${min}, max: ${max}`;
-}
-
 class CamadaAtencao {
   constructor(dimModelo, numCabecas, taxaAprendizado=0.001, taxaDropout=0.1) {
     this.dimModelo = dimModelo;
@@ -722,7 +744,7 @@ class CamadaAtencao {
       }
       for(let i=0; i<seqTam; i++) {
         ponto[i] = [];
-        for(let j=0; j<seqTam; j++) ponto[i][j] = escalarDot(qo[i], ko[j]) / Math.sqrt(this.dimCabeca);
+        for(let j=0; j<seqTam; j++) ponto[i][j] = escalarDot(qo[i], ko[j])/Math.sqrt(this.dimCabeca);
       }
       if(mascara) {
         for(let i=0; i<seqTam; i++) {
@@ -730,10 +752,10 @@ class CamadaAtencao {
             if(!mascara[i][j]) ponto[i][j] = -1e9;
         }
       }
+      eNaN(ponto);
       pontosCabecas[o] = ponto;
       pCabecas[o] = ponto.map(linha => softmax(linha));
     }
-    
     const atSCabecas = pCabecas.map((pp, o) => {
       const vo = vCab[o];
       return vo.map((_, i) => {
@@ -763,20 +785,21 @@ class CamadaAtencao {
     // dConcat = dO · Wo^T
     const dPoT = transpor(this.ps);
     eNaN(dPoT, "dPoT", "CamadaAtencao");
+    if(!Array.isArray(dO) || dO.some(l => !Array.isArray(l))) throw new Error("[CamadaAtencao] dO contém item inválido ou undefined");
+    
     let dConcat = dO.map(do_i => aplicarMatriz(dPoT, do_i));
-    // eNaN(dConcat, "dConcat", "CamadaAtencao");
-    dConcat = dConcat.map(vetor => clipVetor(vetor, 1.0));
     eNaN(dConcat, "dConcat", "CamadaAtencao");
+    dConcat = dConcat.map(vetor => clipVetor(vetor, 1.0));
     // gradientes de ps e bs
     let dPs = multMatrizes(transpor(juntar), dO);
     eNaN(dPs, "dPs", "CamadaAtencao");
     let dBo = dO.reduce((s, v)=>somarVetores(s, v), zeros(this.dimModelo));
     eNaN(dBo, "dBo", "CamadaAtencao");
-    // split dConcat nos cabecas
+    // divide dConcat nqs cabecas
     if(x[0].length !== this.numCabecas*this.dimCabeca) throw new Error("dividirCabecas recebeu vetor de tamanho inválido: "+x[0].length+" ≠ "+(this.numCabecas*this.dimCabeca));
     if(dConcat[0].length !== this.numCabecas*this.dimCabeca) throw new Error("dConcat com dimensão errada: "+dConcat[0].length);
     const dAtCabecas = this.dividirCabecas(dConcat);
-    // inicia os grads
+    // grads:
     let dPq = matrizZeros(this.dimModelo, this.dimModelo);
     let dPk = matrizZeros(this.dimModelo, this.dimModelo);
     let dPv = matrizZeros(this.dimModelo, this.dimModelo);
@@ -794,18 +817,20 @@ class CamadaAtencao {
       eNaN(po, "po", "CamadaAtencao");
       eNaN(dAo, "dAo", "CamadaAtencao");
       eNaN(vo, "vo", "CamadaAtencao");
-      const dPO = po.map((_, i) => {
+      const dPO = [];
+      for(let i=0; i<po.length; i++) {
         let soma = zeros(this.dimCabeca);
-        for(let j=0; j<dAo[i].length; j++) {
+        for(let j=0; j<this.dimCabeca; j++) {
           const mult = dAo[i][j];
+          if(typeof mult !== "number") throw new Error(`mult inválido: dAo[${i}][${j}] = ${mult}`);
           for(let k=0; k<this.dimCabeca; k++) {
-            if(!dAo[i] || typeof dAo[i][j] !== "number") throw new Error("mult inválido: dAo["+i+"]["+j+"]="+dAo[i]?.[j]);
-            if(!isFinite(vo[j][k]*mult)) throw new Error("Explodiu: vo["+j+"]["+k+"]="+vo[j][k]+" * mult="+mult);
-            soma[k] += vo[j][k]*mult;
+            const valor = vo[i][k]
+            if(!isFinite(valor*mult)) throw new Error(`Explodiu: vo[${i}][${k}]=${valor}*mult=${mult}`);
+            soma[k] += valor*mult;
           }
         }
-        return clipVetor(soma, 0.5);;
-      });
+        dPO.push(clipVetor(soma, 0.5));
+      }
       eNaN(dPO, "dPO", "CamadaAtencao");
       for(let i=0; i<po.length; i++) {
         if(po[i].some(v=>isNaN(v))) throw new Error(`[CamadaAtencao] po[${i}] contém NaN`);
@@ -832,8 +857,8 @@ class CamadaAtencao {
       // atualizar dX, dkoTodo e dVhAll
       const invSqrt = 1/Math.sqrt(this.dimCabeca);
       if(isNaN(invSqrt)) console.error("[CamadaAtencao]: invSqrt é NaN");
-      for(let i=0; i<seqTam; i++) {
-        for(let j=0; j<seqTam; j++) {
+      for(let i=0; i<qo.length; i++) {
+        for(let j=0; j<ko.length; j++) {
           const grad = dPontos[i][j]*invSqrt;
           // dX
           const inicio = o*this.dimCabeca;
@@ -1215,8 +1240,14 @@ class GSATransformer {
 
   propagar(tokens, treino=true) {
     const seqTam = tokens.length
-    let xNoPos = tokens.map(t=>normZPonto(this.embedding[t]));
-    
+    let xNoPos = tokens.map(t => {
+      const emb = this.embedding[t];
+      if(!emb) {
+        console.error(`Token ${t} não encontrado no embedding! Usando embedding padrão.`);
+        return normZPonto(this.embedding[1]); // usa <DES> como fallback
+        }
+        return normZPonto(emb);
+    });
     if(treino) xNoPos = dropout(xNoPos, this.taxaDropoutEmbed);
     
     let xPos = this.codificadorPos.aplicar(xNoPos);
@@ -1296,14 +1327,25 @@ class GSATransformer {
     }
     return m;
   }
-  gerar(prompt, maxTokens=50, temperatura=0.8) {
+  gerar(prompt, maxTokens=50, temperatura=0.8, repeticaoPenal=1.5) {
     let tokens = [...prompt];
+    const idFIM = gsa.tokenizador.tokenPraId.get('<FIM>');
+    
     for(let i=0; i<maxTokens; i++) {
       const logits = this.propagar(tokens, false);
       const ultimosLogits = logits[logits.length-1];
       
+      // penalização para tokens repetidos
+      const tokensUnicos = [...new Set(tokens)];
+      tokensUnicos.forEach(token => {
+        ultimosLogits[token] /= repeticaoPenal;
+      });
+    
       const probs = softmax(ultimosLogits, temperatura);
       const proximoToken = this.exemploProb(probs);
+      
+      // para se gerar FIM
+      if(proximoToken===idFIM) break;
       
       tokens.push(proximoToken);
       if(tokens.length >= this.seqMaxima) break;
@@ -1350,8 +1392,8 @@ class TokenizadorBPE {
       this.byteDecoder[cs[i]] = i;
     }
     for(let i=0; i<merges.length; ++i) this.bpeRanks[merges[i].join(' ')] = i;
-    this.tokenPraId = new Map([['<PAD>', 0], ['<UNK>', 1]]);
-    this.idPraToken = new Map([[0, '<PAD>'], [1, '<UNK>']]);
+    this.tokenPraId = new Map([['<ALMO>', 0], ['<DES>', 1], ['<FIM>', 2]]);
+    this.idPraToken = new Map([[0, '<ALMO>'], [1, '<DES>'], [2, '<FIM>']]);
     this.proximoId = 2;
   }
   construir(texto) {
@@ -1369,10 +1411,13 @@ class TokenizadorBPE {
   }
   codificar(texto) {
     const tokensBPE = this.encode(texto);
-    return tokensBPE.map(token => this.tokenPraId.get(token) || 1); // 1 = <UNK>
+    return tokensBPE.map(token => this.tokenPraId.get(token) || 1); // 1 = <DES>
   }
   decodificar(ids) {
-    const tokens = ids.map(id => this.idPraToken.get(id) || '<UNK>');
+    const tokens = ids.map(id => {
+      if(id==this.idPraToken.get("<FIM>")) return '';
+      return this.idPraToken.get(id) || '<DES>';
+    });
     return this.decode(tokens.join('').split('')); // recompõe o texto
   }
   get vocabTam() {
@@ -1447,38 +1492,50 @@ class TreinadorGSA {
     this.modelo.taxa = taxaAprendizado;
     this.historico = [];
     this.taxaInicial = 0.1;
+    this.idFIM = 2;
   }
+  
   treinar(dados, epocas=10, tamanhoLote=8) {
-    this.epocas = epocas;
+    this.idFIM = gsa.tokenizador.tokenPraId.get('<FIM>') || 2;
     for(let epoca=0; epoca<epocas; epoca++) {
-      let perdaEpoca = 0;
+      let perdaTotalEpoca = 0;
+      let totalTokensEpoca = 0;
       let numLotes = 0;
+      
       for(let i=0; i<dados.length; i += tamanhoLote) {
         const lote = dados.slice(i, i+tamanhoLote);
-        const perdaLote = this.treinarLote(lote, epoca);
-        perdaEpoca += perdaLote;
+        const { perdaLote, tokensNoLote } = this.treinarLote(lote, epoca);
+        perdaTotalEpoca += perdaLote*tokensNoLote;
+        totalTokensEpoca += tokensNoLote;
         numLotes++;
-        if(numLotes%10==0) console.log(`Época ${epoca+1}, Lote ${numLotes}, Perda: ${perdaLote.toFixed(4)}`);
+        
+        if(numLotes%10==0) {
+          console.log(`Época ${epoca+1}/${epocas}, Lote ${numLotes}, Perda: ${perdaLote.toFixed(4)}, Taxa: ${this.modelo.taxa.toFixed(4)}`);
+          console.log("\nAmostra \"Olá\": ", gsa.gerar("Olá", 10, 0.6));
+          console.log("Amostra \"O plasma\": ", gsa.gerar("O plasma", 10, 0.6));
+          console.log("Amostra \"O hidrogênio é\": ", gsa.gerar("O hidrogênio é", 10, 0.6)+"\n");
+          gsa.ctx = "";
+        }
       }
-      const perdaMedia = perdaEpoca/numLotes;
+      const perdaMedia = totalTokensEpoca>0 ? perdaTotalEpoca/totalTokensEpoca : 0;
       this.historico.push(perdaMedia);
-      console.log(`Época ${epoca+1}/${epocas} | Perda média: ${perdaMedia.toFixed(4)} | Taxa: ${this.modelo.taxa}`);
-      if(epoca%10==0) {
+      console.log(`Época ${epoca+1}/${epocas}, Perda média: ${perdaMedia.toFixed(4)}, Taxa: ${this.modelo.taxa.toFixed(4)}`);
+      
+      if(epoca%5==0) {
         salvar(gsa, "modelo-"+epoca+".gsa");
-        console.log("Amostra \"olá\": ", gsa.gerar("olá", 10, 0.6));
+        console.log("\nAmostra \"olá\": ", gsa.gerar("olá", 10, 0.6));
         console.log("Amostra \"tudo bem?\": ", gsa.gerar("tudo bem?", 10, 0.6));
-        console.log("Amostra \"quem é você?\": ", gsa.gerar("quem é você?", 10, 0.6));
+        console.log("Amostra \"quem é você?\": ", gsa.gerar("quem é você?", 10, 0.6)+"\n");
         gsa.ctx = "";
       }
-      if(epoca>0) {
+      if(epoca>0 && this.historico.length>1) {
         let perdaAntiga = this.historico[epoca-1];
-        if(perdaMedia>perdaAntiga*1.02) { // perda>2%
-        this.modelo.taxa *= 0.7; // reduz 30%
-        console.log(`[TAXA][Redução]: ${this.modelo.taxa.toFixed(4)}`);
+        if(perdaMedia>perdaAntiga*1.02) {
+          this.modelo.taxa *= 0.7;
+          console.log(`[TAXA][Redução]: ${this.modelo.taxa.toFixed(4)}`);
         } else if(perdaMedia<perdaAntiga*0.98) {
-          this.modelo.taxa *= 1.08; // aumenta 8%
+          this.modelo.taxa = Math.min(this.modelo.taxa*1.08, 0.01);
           console.log(`[TAXA][Aumento]: ${this.modelo.taxa.toFixed(4)}`);
-          if(this.modelo.taxa>0.01) this.modelo.taxa = 0.01;
         }
       }
     }
@@ -1486,37 +1543,35 @@ class TreinadorGSA {
   treinarLote(lote, epoca) {
     const taxaAtual = this.taxaInicial/(1+0.01*epoca);
     this.modelo.taxa = taxaAtual;
-    for(const [i, seq] of lote.entries()) {
-      if(!Array.isArray(seq)) throw new Error(`lote[${i}] não é array`);
-      if(seq.length<2) {
-        console.error(`lote[${i}] tem ${seq.length} tokens:`, seq);
-        continue;
-      }
-    }
     let perdaTotal = 0;
+    let totalTokens = 0;
+
     for(const seq of lote) {
-      const entrada = seq.slice(0, -1);
-      const esperado = seq.slice(1);
+      const posFIM = seq.indexOf(this.idFIM);
+      const seqValida = posFIM >= 0 ? seq.slice(0, posFIM+1) : seq;
+      
+      if(seqValida.length<2) continue;
+      const entrada = seqValida.slice(0, -1);
+      const esperado = seqValida.slice(1);
+      // previsões
       const logits = this.modelo.propagar(entrada);
-      if(logits.some(v=>v.some(n=>isNaN(n) || !isFinite(n)))) throw new Error("Logits corrompidos antes do softmax");
       const probs = logits.map(l => softmax(l));
-      eNaN(probs, "probs", "TreinadorGSA");
+      
       const sVerdade = esperado.map((t, i) => {
-        if(!Number.isInteger(t) || t<0 || t >= this.modelo.vocabTam) console.error(`[erro token]: esperado[${i}] = ${t}`);
         return oneHot(t, this.modelo.vocabTam);
       });
-      eNaN(sVerdade, "sVerdade", "TreinadorGSA");
-      if(sVerdade.length != probs.length) throw new Error(`[ERRO]: sVerdade (${sVerdade.length}) ≠ probs (${probs.length})`);
-      let dLogits = sVerdade.map((s, i)=>derivadaEntropiaCruzada(s, probs[i]));
-      
+      // gradientes
+      let dLogits = sVerdade.map((s, i) => derivadaEntropiaCruzada(s, probs[i]));
       dLogits = dLogits.map(vetor => clipVetor(vetor, 1.0));
-      eNaN(dLogits, "dLogits", "TreinadorGSA");
-      
       this.modelo.retropropagar(dLogits);
-      const ult = sVerdade.length-1;
-      perdaTotal += entropiaCruzada(sVerdade[ult], probs[ult]);
+      // calcula perda pra cada posição
+      for(let pos=0; pos<sVerdade.length; pos++) {
+        perdaTotal += entropiaCruzada(sVerdade[pos], probs[pos]);
+      }
+      totalTokens += sVerdade.length;
     }
-    return perdaTotal/lote.length;
+    const perdaMedia = totalTokens>0 ? perdaTotal/totalTokens : 0;
+    return { perdaLote: perdaMedia, tokensNoLote: totalTokens };
   }
 }
 function criarGSA(textoTreinamento, config={}, taxa=0.001) {
@@ -1541,11 +1596,16 @@ function criarGSA(textoTreinamento, config={}, taxa=0.001) {
     tokenizador,
     treinador,
     gerar: function(prompt, maxTokens=50, temperatura=0.8) {
-      this.ctx = (this.ctx+prompt).slice(-this.modelo.seqMaxima*0.75); // mantém os últimos 75% do limite
+      this.ctx = (this.ctx+prompt)
+      .split(/(?<=[.!?])\s+/) // divide por sentenças
+      .slice(-5) // mantém 5 últimas sentenças
+      .join(' ');
       const tokens = tokenizador.codificar(this.ctx);
+      const idFIM = tokenizador.tokenPraId.get('<FIM>');
       const gerados = modelo.gerar(tokens, maxTokens, temperatura);
-      const saida = tokenizador.decodificar(gerados);
-      this.ctx += " "+saida+"\n";
+      // filtra FIM da saída final
+      const saida = tokenizador.decodificar(gerados.filter(t => t !== idFIM));
+      this.ctx += " "+saida;
       return saida;
     }
   };
@@ -1553,9 +1613,9 @@ function criarGSA(textoTreinamento, config={}, taxa=0.001) {
 let gsa = null;
 
 const fs = require('fs');
-const readline = require('readline');
+const rd = require('readline');
 
-const rl = readline.createInterface({
+const rl = rd.createInterface({
   input: process.stdin,
   output: process.stdout
 });
@@ -1566,13 +1626,18 @@ const estudo = [
   "quimica",
   "programacao",
   "filosofia",
+  "poesia",
   "astronomia",
   "medicina",
   "psicologia",
   "matematica",
   "JAVA",
+  "HTML",
+  "CSS",
   "JS",
-  "C"
+  "C",
+  
+  "conversa"
 ];
 
 let treino = "";
@@ -1585,15 +1650,23 @@ for(let i=0; i<estudo.length; i++) {
   }
 }
 // fs.writeFileSync("treino.txt", treino, "utf-8");
-console.log("[TREINO]: Concluído");
+console.log("[DADOS DE TREINO]: Concluídos");
 // treino = fs.readFileSync("treino.txt", "utf-8");
-
 function prepararDados(texto, tokenizador, seqTam=32) {
+  texto = texto
+  .replace(/https?:\/\/\S+/g, '') // remove ulrs
+  .replace(/```[\s\S]*?```/g, '') // remove blocos de código
+  .replace(/[\u{1F600}-\u{1F6FF}]/gu, ''); // remove emojis
+  
   const tokens = tokenizador.codificar(texto);
   const seqs = [];
+  
+  const idFIM = tokenizador.tokenPraId.get('<FIM>');
+  
   for(let i=0; i<tokens.length-seqTam; i += seqTam) {
-    const seq = tokens.slice(i, i+seqTam+1);
-    if(seq.length==seqTam+1) seqs.push(seq);
+    let seq = tokens.slice(i, i+seqTam);
+    seq.push(idFIM); // Adiciona EOS no final
+    seqs.push(seq);
   }
   return seqs;
 } 
@@ -1620,10 +1693,9 @@ function obterParams(gsa) {
 function avaliarModelo(gsa, perguntasTeste) {
   console.log('\n=== AVALIAÇÃO DO MODELO ===\n');
   perguntasTeste.forEach((pergunta, i) => {
-    console.log(`${i + 1}. Pergunta: "${pergunta}"`);
+    console.log(`${i+1}. Pergunta: "${pergunta}"`);
     const resposta = gsa.gerar(pergunta, 20, 0.7);
-    console.log(`   Resposta: "${resposta}"`);
-    console.log('');
+    console.log(`   Resposta: "${resposta}"\n`);
   });
 }
 
@@ -1662,16 +1734,17 @@ function conversa() {
 }
 
 function executarTeste() {
-  rl.question('treinar novo? (s/n) ', (entrada) => {
+  rl.question('> Treinar novo? (s/n) ', (entrada) => {
     if(entrada.toLowerCase()=='s') {
       console.log('> Criando modelo...');
       gsa = criarGSA(treino, {
-        dimModelo: 192,
-        numCamadas: 4,
-        numCabecas: 8,
-        dimFFN: 768,
-        seqMaxima: 256,
-        taxaAprendizado: 0.001
+        dimModelo: 32, // 192,
+        numCamadas: 3,// 4,
+        numCabecas: 8, // 8,
+        dimFFN: 32*4, // 768,
+        seqMaxima: 128,
+        taxaAprendizado: 0.001,
+        taxaDropout: 0.2
       });
       treinarNovo();
     } else {
@@ -1684,14 +1757,16 @@ function executarTeste() {
 function treinarNovo() {
   console.log(`> Vocabulário criado com ${gsa.tokenizador.vocabTam} tokens`);
   console.log('> Preparando dados de treinamento...');
-  const dados = prepararDados(treino, gsa.tokenizador);
-  console.log(`   ${dados.length} sequências de treinamento preparadas (√)`);
+  const dados = prepararDados(treino, gsa.tokenizador, 32)// 64);
+  console.log(`   ${dados.length} sequências de treinamento ${dados.length > 0 ? "preparadas (√)" : "erradas (X)"}`);
   console.log("==== ESTATÍSTICAS ====");
   console.log(`  Dimensão do modelo: ${gsa.modelo.dimModelo}`);
   console.log(`  Número de camadas: ${gsa.modelo.numCamadas}`);
   console.log(`  Número de cabeças: ${gsa.modelo.numCabecas}`);
   console.log(`  Dimensão FFN: ${gsa.modelo.dimFFN}`);
   console.log(`  Sequência máxima: ${gsa.modelo.seqMaxima}`);
+  console.log(`  Taxa Dropout: ${gsa.modelo.taxaDropout}`);
+  gsa.treinador.epocas = 2;
   console.log(`  Épocas: ${gsa.treinador.epocas}`);
   console.log(`  Taxa de aprendizado: ${gsa.modelo.taxa}`);
   
@@ -1699,7 +1774,7 @@ function treinarNovo() {
   
   console.log('\n> Iniciando treinamento...');
   // TREINAMENTO:
-  gsa.treinador.treinar(dados, 15, 32);
+  gsa.treinador.treinar(dados, 15, 8) // 32);
   
   console.log('\n> Testando geração de texto...');
   const perguntasTeste = [
@@ -1925,11 +2000,16 @@ function carregar(caminhoArquivo) {
     tokenizador,
     treinador,
     gerar: function(prompt, maxTokens=50, temperatura=0.8) {
-      this.ctx = (this.ctx+prompt).slice(-this.modelo.seqMaxima*0.75);
+      this.ctx = (this.ctx+prompt)
+      .split(/(?<=[.!?])\s+/) // divide por sentenças
+      .slice(-5) // mantém 5 últimas sentenças
+      .join(' ');
       const tokens = tokenizador.codificar(this.ctx);
+      const idFIM = tokenizador.tokenPraId.get('<FIM>');
       const gerados = modelo.gerar(tokens, maxTokens, temperatura);
-      const saida = tokenizador.decodificar(gerados);
-      this.ctx += " "+saida+"\n";
+      // filtra FIM da saída final
+      const saida = tokenizador.decodificar(gerados.filter(t => t !== idFIM));
+      this.ctx += " "+saida;
       return saida;
     }
   };
@@ -1943,6 +2023,7 @@ function mostrarEstatisticas(gsa) {
   console.log(`  Número de cabeças: ${gsa.modelo.numCabecas}`);
   console.log(`  Dimensão FFN: ${gsa.modelo.dimFFN}`);
   console.log(`  Sequência máxima: ${gsa.modelo.seqMaxima}`);
+  console.log(`  Taxa Dropout: ${gsa.modelo.taxaDropout}`);
   console.log(`  Épocas: ${gsa.treinador.epocas}`);
   console.log(`  Taxa de aprendizado: ${gsa.modelo.taxa}`);
   console.log('  ★Parâmetros estimados★:', obterParams());
