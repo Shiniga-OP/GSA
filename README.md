@@ -6,6 +6,8 @@ a implementação em JS é a implementação mais perto de uma IA real, o GSA é
 
 a o arquivo C é uma implementação de parte da minha biblioteca de Redes Neurais, uma tentativa de ganhar mais desempenho utilizando baixo nível, mas incompleta.
 
+na pasta "biblis" você pode encontrar os tokenizadores que fiz, e em "util.js" você pode encontrar os utilitários (não garanto que estejam atualizados)
+
 ## conteúdo 
 
 você pode encontrar no arquivo JS:
