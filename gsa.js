@@ -214,14 +214,6 @@ function subMatriz(a, b) {
   if(a.length != b.length) console.error("[subMatriz]: tamanho incompatível");
   return a.map((l, i)=>l.map((v, j)=>v-b[i][j]));
 }
-function multMatriz(m, s) {
-  if(a.length != b.length) console.error("[multMatriz]: tamanho incompatível");
-  return m.map(l=>l.map(v=>v*s));
-}
-function multMatrizes(a, b) {
-  if(a.length != b.length) console.error("[multMatrizes]: tamanho incompatível");
-  return a.map(l=>b[0].map((_,j)=>l.reduce((soma,valA,k)=>soma+valA*(b[k]?b[k][j]:0),0)));
-}
 function aplicarMatriz(m, v) {
   if(!Array.isArray(v)) console.error("[aplicarMatriz]: o segundo parâmetro não é um vetor");
   return m.map(l=>escalarDot(l, v));
@@ -644,7 +636,7 @@ class CamadaFFN {
     const ativ1 = lin1.map(seq=>seq.map(ReLU));
     
     let camada1 = ativ1;
-    if(treino) camada1 = ativ1.map(seq=>seq.map(v=>dropout(v, this.taxaDrop)));
+    if(treino) camada1 = dropout(ativ1, this.taxaDrop);
     
     const z2 = camada1.map(seq=>aplicarMatriz(this.p2, seq));
     const saida = z2.map((seq, i)=>somarVetores(seq, this.b2));
@@ -713,7 +705,7 @@ class CamadaNormalizacao {
     this.cache = {};
     this.taxaDrop = taxaDrop;
   }
-  propagar(x, treino=true) {
+  propagar(x) {
     eNaN(x, "x", "CamadaNormalizacao");
     const seqTam = x.length;
     let saida = [];
@@ -729,7 +721,6 @@ class CamadaNormalizacao {
       saida[i] = seq.map((v,j)=>(v-media)/std*this.gamma[j]+this.beta[j]);
     }
     this.cache = { x, medias, vars };
-    if(treino) saida = dropout(saida, this.taxaDrop);
     eNaN(saida, "saida", "CamadaNormalizacao");
     return saida;
   }
@@ -922,20 +913,17 @@ class TokenizadorBPE {
   }
   codificar(texto) {
     const tokensBPE = this.encode(texto);
-    return tokensBPE.map(token=>{
+    return tokensBPE.flatMap(token => {
       let id = this.tokenPraId.get(token);
-      if(id !== undefined) return id;
-      // se token não existe, tenta quebrar em caracteres individuais
-      const caracs = [...token];
-      if(caracs.length===1) {
-        // é um caractere único, adiciona ao vocabulário
-        id = this.proximoId++;
-        this.tokenPraId.set(token, id);
-        this.idPraToken.set(id, token);
-        return id;
+      if(id !== undefined) return [id];
+      // fallback por caractere
+      const saida = [];
+      for(const c of token) {
+        const cid = this.tokenPraId.get(c);
+        if(cid !== undefined) saida.push(cid);
+        else saida.push(1); // <DES>
       }
-      // token composto desconhecido, usa <DES>
-      return 1;
+      return saida;
     });
   }
   decodificar(ids) {
@@ -1219,19 +1207,20 @@ class Treinador {
         perdaTotalEpoca += perdaLote*tokensNoLote;
         totalTokensEpoca += tokensNoLote;
         console.log(`Época ${epoca+1}/${epocas}, Lote ${numLotes}, Perda: ${perdaLote.toFixed(4)}, Taxa: ${this.modelo.taxa.toFixed(4)}`);
-        if(numLotes%5==0) {
-          console.log("\nAmostra \"Olá\": ", gsa.gerar("Olá", 20));
-          console.log("Amostra \"O plasma\": ", gsa.gerar("O plasma", 20));
-          console.log("Amostra \"O hidrogênio é\": ", gsa.gerar("O hidrogênio é", 20)+"\n");
-        }
+        console.log("\nAmostra \"Olá\": ", gsa.gerar("Olá", 20));
+        console.log("\nAmostra \"Oi\": ", gsa.gerar("Oi", 20));
+        console.log("Amostra \"O plasma\": ", gsa.gerar("O plasma", 20));
+        console.log("Amostra \"O hidrogênio é\": ", gsa.gerar("O hidrogênio é", 20)+"\n");
+        salvar(gsa, "modelo-"+epoca+"-"+numLotes+"_"+perdaLote.toFixed(4)+".gsa");
         numLotes++;
       }
-      const perdaMedia = totalTokensEpoca>0 ? perdaTotalEpoca/totalTokensEpoca : 0;
+      const perdaMedia=totalTokensEpoca>0?perdaTotalEpoca/totalTokensEpoca:0;
       this.historico.push(perdaMedia);
       console.log(`Época ${epoca+1}/${epocas}, Perda média: ${perdaMedia.toFixed(4)}, Taxa: ${this.modelo.taxa.toFixed(4)}`);
-      if(epoca%5==0) {
-        // salvar(gsa, "modelo-"+epoca+".gsa");
+      if(epoca%1==0) {
+        salvar(gsa, "modelo-"+epoca+".gsa");
         console.log("\nAmostra \"olá\": ", gsa.gerar("olá", 20));
+        console.log("\nAmostra \"oi\": ", gsa.gerar("oi", 20));
         console.log("Amostra \"tudo bem?\": ", gsa.gerar("tudo bem?", 20));
         console.log("Amostra \"quem é você?\": ", gsa.gerar("quem é você?", 20)+"\n");
       }
@@ -1413,6 +1402,15 @@ const rl = rd.createInterface({
   input: process.stdin,
   output: process.stdout
 });
+const mConfig = {
+  dimModelo: 128,
+  numCamadas: 3,
+  numCabecas: 4,
+  dimFFN: 128*2,
+  seqMaxima: 526,
+  taxaAprendizado: 0.0001,
+  taxaDropout: 0.05
+};
 const estudo = [
   "fisica",
   "biologia",
@@ -1430,7 +1428,6 @@ const estudo = [
   "JS",
   "C",
   "wik",
-  "biblia",
   "conversa"
 ];
 let treino = "";
@@ -1510,45 +1507,25 @@ function calcularPerplexidade(modelo, tokenizador, textoTeste) {
 function conversa() {
   console.log('Digite "/pr" para encerrar a conversa\n');
   function perguntarUsuario() {
-    rl.question('Você: ', (entrada) => {
-      if(entrada.toLowerCase()=='/pr') {
-        rl.close();
-        return;
-      } else if(entrada.startsWith("$")) eval(entrada.replace("$", ""));
+    rl.question('Você: ',(entrada)=>{
+      if(entrada.toLowerCase()=='/pr'){rl.close();return;} else if(entrada.startsWith("$")) eval(entrada.replace("$", ""));
       const resposta = gsa.gerar(entrada, 30);
       console.log(`ALVA GSA-1: ${resposta}`);
-      perguntarUsuario();
-    });
+      perguntarUsuario();});
   }
   perguntarUsuario();
 }
 function executarTeste() {
   rl.question('> Treinar novo? (s/n) ', (entrada) => {
-    if(entrada.toLowerCase()=='s') {
-      console.log('> Criando modelo...');
-      treino = treino.normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-      .replace(/[^\w\s<>\.\,\!\?\-;:'"]/g,"")
-      .replace(/\s+/g," ");
-      gsa = criarGSA(treino, {
-        dimModelo: 256,
-        numCamadas: 4,
-        numCabecas: 8,
-        dimFFN: 256*4,
-        seqMaxima: 526*2,
-        taxaAprendizado: 0.0001,
-        taxaDropout: 0.2
-      });
+    if(entrada.toLowerCase()=='s'){console.log('> Criando modelo...');
+      gsa = criarGSA(treino, mConfig);
       treinarNovo();
-    } else {
-      gsa = carregar("modelo.gsa");
-      conversa();
-    }
-  });
+    } else{gsa = carregar("modelo.gsa", mConfig);conversa();}});
 }
 function treinarNovo() {
   console.log(`> Vocabulário criado com ${gsa.tokenizador.vocabTam} tokens`);
   console.log('> Preparando dados de treinamento...');
-  const dados = prepararDados(treino, gsa.tokenizador, 128);
+  const dados = prepararDados(treino, gsa.tokenizador, 64+16);
   console.log(`   ${dados.length} sequências de treinamento ${dados.length > 0 ? "preparadas (√)" : "erradas (X)"}`);
   console.log("==== ESTATÍSTICAS ====");
   console.log(`  Dimensão do modelo: ${gsa.modelo.dimModelo}`);
@@ -1558,30 +1535,24 @@ function treinarNovo() {
   console.log(`  Sequência máxima: ${gsa.modelo.seqMaxima}`);
   console.log(`  Taxa Dropout: ${gsa.modelo.taxaDropout}`);
   console.log(`  Taxa de aprendizado: ${gsa.modelo.taxa}`);
-  
   console.log('  ★Parâmetros estimados★:', obterParams(gsa));
-  
   console.log('\n> Iniciando treinamento...');
   // TREINAMENTO:
-  gsa.treinador.treinar(dados, 20, 64);
+  gsa.treinador.treinar(dados, 20, 32);
   console.log('\n> Testando geração de texto...');
-  const perguntasTeste = [
-    'Como você está',
+  const perguntasTeste = ['Como você está',
     'Qual é o seu nome',
     'O que você gosta',
     'Conte uma história',
-    'Qual seu conselho'
-  ];
+    'Qual seu conselho'];
   avaliarModelo(gsa, perguntasTeste);
-  
   console.log('\n> Calculando perplexidade...');
   const textoTeste = 'Olá, como você está? Qual é o seu nome?';
   const perplexidade = calcularPerplexidade(gsa.modelo, gsa.tokenizador, textoTeste);
   console.log(`   Perplexidade: ${perplexidade.toFixed(2)}`);
-  
   console.log('\n> Exemplos de geração livre:');
   const prompts = ['Era uma vez', 'A tecnologia', 'Amizade é'];
-  prompts.forEach(prompt => {
+  prompts.forEach(prompt=>{
     console.log(`   "${prompt}": "${gsa.gerar(prompt, 20, 0.8)}"`);
   });
   console.log('\n=== TREINO CONCLUÍDO ===');
@@ -1589,202 +1560,121 @@ function treinarNovo() {
   salvar(gsa, "modelo.gsa");
   conversa(gsa);
 }
+const SALVAMENTO_VERSAO = 1;
 function salvar(gsa, caminhoArquivo) {
-  const leitor = {
-    vocabTam: gsa.modelo.vocabTam,
-    dimModelo: gsa.modelo.dimModelo,
-    numCamadas: gsa.modelo.numCamadas,
-    numCabecas: gsa.modelo.numCabecas,
-    dimFFN: gsa.modelo.dimFFN,
-    seqMaxima: gsa.modelo.seqMaxima,
-    tokenizador: {
-      tokenPraId: Array.from(gsa.tokenizador.tokenPraId.entries()),
-      idPraToken: Array.from(gsa.tokenizador.idPraToken.entries())
-    },
-    historico: gsa.treinador.historico
-  };
-  // calcula tamanho total dos dados
-  let totalFloats = 0;
-  // embedding
-  totalFloats += gsa.modelo.vocabTam*gsa.modelo.dimModelo;
-  
-  for(const bloco of gsa.modelo.camadas) {
-    // atenção
-    totalFloats += 4*(gsa.modelo.dimModelo*gsa.modelo.dimModelo); // pq, pk, pv, ps
-    totalFloats += 4*gsa.modelo.dimModelo; // bq, bk, bv, bs
-    // FFN
-    totalFloats += gsa.modelo.dimFFN*gsa.modelo.dimModelo; // p1
-    totalFloats += gsa.modelo.dimFFN; // b1
-    totalFloats += gsa.modelo.dimModelo*gsa.modelo.dimFFN; // p2
-    totalFloats += gsa.modelo.dimModelo; // b2
-    // normalização
-    totalFloats += 2*gsa.modelo.dimModelo; // gamma, beta(norm1)
-    totalFloats += 2*gsa.modelo.dimModelo; // gamma, beta(norm2)
-  }
-  // normalização final
-  totalFloats += 2*gsa.modelo.dimModelo; // gamma, beta
-  // cabeça LM
-  totalFloats += gsa.modelo.vocabTam*gsa.modelo.dimModelo; // cabecaLM
-  totalFloats += gsa.modelo.vocabTam; // biasCabeca
-  // criacbuffer
-  const leitorString = JSON.stringify(leitor);
-  const leitorTamBytes = leitorString.length;
-  // calcular prenchimento pra alinhamento de 4 bytes
-  const prenchimento = (4-(leitorTamBytes%4))%4;
-  const buffer = new ArrayBuffer(
-    8+ // numero mágico+tamanho leitor
-    leitorTamBytes+
-    prenchimento+ // bytes de alinhamento
-    totalFloats*4
-  );
-  const view = new DataView(buffer);
-  let antes = 0;
-  // numero magico(GSA1) em hex
-  view.setUint32(antes, 0x47534131);
-  antes += 4;
-  // tamanho do leitor(incluindo prenchimento)
-  view.setUint32(antes, leitorTamBytes+prenchimento);
-  antes += 4;
-  // escreve o leitor
-  for(let i=0; i<leitorTamBytes; i++) {
-    view.setUint8(antes, leitorString.charCodeAt(i));
-    antes++;
-  }
-  // adiciona bytes de prenchimento para alinhamento
-  for(let i=0; i<prenchimento; i++) {
-    view.setUint8(antes, 0);
-    antes++;
-  }
-  // escreve parâmetros
-  const floatView = new Float32Array(buffer, antes);
-  let floatIndice = 0;
-  
-  function salvarVetor(v) {
-    for(let i=0; i<v.length; i++) floatView[floatIndice++] = v[i];
-  }
-  function salvarMatriz(m) {
-    for(let i=0; i<m.length; i++) {
-      for(let j=0; j<m[i].length; j++) floatView[floatIndice++] = m[i][j];
+    const modelo = gsa.modelo;
+    const floats = [];
+    const leitor = new Int32Array([
+        SALVAMENTO_VERSAO,
+        modelo.vocabTam,
+        modelo.dimModelo,
+        modelo.numCamadas,
+        modelo.numCabecas,
+        modelo.dimFFN,
+        modelo.seqMaxima
+    ]);
+    // embeddings
+    for(let i=0; i<modelo.embedding.embeddings.length; i++) {
+      for(let j=0;j<modelo.embedding.embeddings[i].length;j++)floats.push(modelo.embedding.embeddings[i][j]);
     }
-  }
-  // embedding
-  salvarMatriz(gsa.modelo.embedding);
-  // camadas
-  for(const bloco of gsa.modelo.camadas) {
-    // atenção
-    salvarMatriz(bloco.atencao.pq);
-    salvarMatriz(bloco.atencao.pk);
-    salvarMatriz(bloco.atencao.pv);
-    salvarMatriz(bloco.atencao.ps);
-    salvarVetor(bloco.atencao.bq);
-    salvarVetor(bloco.atencao.bk);
-    salvarVetor(bloco.atencao.bv);
-    salvarVetor(bloco.atencao.bs);
-    // FFN
-    salvarMatriz(bloco.ffn.p1);
-    salvarVetor(bloco.ffn.b1);
-    salvarMatriz(bloco.ffn.p2);
-    salvarVetor(bloco.ffn.b2);
-    // normalização
-    salvarVetor(bloco.norm1.gamma);
-    salvarVetor(bloco.norm1.beta);
-    salvarVetor(bloco.norm2.gamma);
-    salvarVetor(bloco.norm2.beta);
-  }
-  // normalização final
-  salvarVetor(gsa.modelo.normFinal.gamma);
-  salvarVetor(gsa.modelo.normFinal.beta);
-  // cabeça LM
-  salvarMatriz(gsa.modelo.cabecaLM);
-  salvarVetor(gsa.modelo.biasCabeca);
-  // salvar arquivo
-  fs.writeFileSync(caminhoArquivo, Buffer.from(buffer));
-  console.log(`Modelo salvo em: ${caminhoArquivo} (${(buffer.byteLength/1024/1024).toFixed(2)} MB)`);
+    // camadas
+    modelo.camadas.forEach(bloco => {
+        // atenção
+        salvarMatriz(bloco.atencao.pq, floats);
+        salvarMatriz(bloco.atencao.pk, floats);
+        salvarMatriz(bloco.atencao.pv, floats);
+        salvarMatriz(bloco.atencao.ps, floats);
+        salvarVetor(bloco.atencao.bq, floats);
+        salvarVetor(bloco.atencao.bk, floats);
+        salvarVetor(bloco.atencao.bv, floats);
+        salvarVetor(bloco.atencao.bs, floats);
+        // FFN
+        salvarMatriz(bloco.ffn.p1, floats);
+        salvarMatriz(bloco.ffn.p2, floats);
+        salvarVetor(bloco.ffn.b1, floats);
+        salvarVetor(bloco.ffn.b2, floats);
+        // normalização(gamma antes de beta)
+        salvarVetor(bloco.norm1.gamma, floats);
+        salvarVetor(bloco.norm1.beta, floats);
+        salvarVetor(bloco.norm2.gamma, floats);
+        salvarVetor(bloco.norm2.beta, floats);
+    });
+    // normalização final
+    salvarVetor(modelo.normFinal.gamma, floats);
+    salvarVetor(modelo.normFinal.beta, floats);
+    // camada de saída
+    salvarMatriz(modelo.cabecaSaida.p, floats);
+    salvarVetor(modelo.cabecaSaida.b, floats);
+    const floatBuffer = new Float32Array(floats);
+    const combinado = new Uint8Array(leitor.byteLength+floatBuffer.byteLength);
+    combinado.set(new Uint8Array(leitor.buffer),0);
+    combinado.set(new Uint8Array(floatBuffer.buffer),leitor.byteLength);
+    fs.writeFileSync(caminhoArquivo, combinado);
+    console.log(`Modelo salvo (v${SALVAMENTO_VERSAO}): ${caminhoArquivo} [${floatBuffer.length} parâmetros]`);
 }
-function carregar(caminhoArquivo) {
-  const buffer = fs.readFileSync(caminhoArquivo);
-  const view = new DataView(buffer.buffer);
-  let antes = 0;
-  // verifica a versão
-  if(view.getUint32(antes) !== 0x47534131) throw new Error("Formato de arquivo inválido");
-  antes += 4;
-  // le o tamanho do leitor
-  const leitorTamPrenchido = view.getUint32(antes);
-  antes += 4;
-  // le o leitor
-  let leitorJSON = "";
-  const leitorTam = leitorTamPrenchido;
-  for(let i=0; i<leitorTam; i++) {
-    const byte = view.getUint8(antes++);
-    // ignorar bytes de padding(não imprimíveis)
-    if(byte >= 32 && byte <= 126) leitorJSON += String.fromCharCode(byte);
-  }
-  const leitor = JSON.parse(leitorJSON);
-  const tokenizador = new TokenizadorBPE();
-  tokenizador.tokenPraId = new Map(leitor.tokenizador.tokenPraId);
-  tokenizador.idPraToken = new Map(leitor.tokenizador.idPraToken);
-  tokenizador.proximoId = leitor.vocabTam;
-  
-  const modelo = new GSA(leitor);
-  // carrega os parâmetros
-  const floatView = new Float32Array(buffer.buffer, antes);
-  let floatIndice = 0;
-  
-  function carregarVetor(tam) {
-    const v = new Array(tam);
-    for(let i=0; i<tam; i++) v[i] = floatView[floatIndice++];
-    return v;
-  }
-  function carregarMatriz(linhas, cols) {
-    const m = new Array(linhas);
-    for(let i=0; i<linhas; i++) {
-      m[i] = new Array(cols);
-      for(let j=0; j<cols; j++) m[i][j] = floatView[floatIndice++];
+function carregar(caminhoArquivo, config) {
+    const buffer = fs.readFileSync(caminhoArquivo);
+    const leitor = new Int32Array(buffer.buffer, 0, 7);
+    const [versao, vocabTam, dimModelo, numCamadas, numCabecas, dimFFN, seqMaxima] = leitor;
+    if(versao != SALVAMENTO_VERSAO)throw new Error(`Versão incompatível: arquivo v${versao} | esperado v${SALVAMENTO_VERSAO}`);
+    const configCompativel = (config.dimModelo==dimModelo&&config.numCamadas==numCamadas&&config.numCabecas==numCabecas&&config.dimFFN==dimFFN);
+    if(!configCompativel) {
+        console.warn("Aviso: Configuração do modelo diferente do arquivo!");
+        console.warn(`Arquivo: ${dimModelo}D ${numCamadas}L ${numCabecas}H`);
+        console.warn(`Config:  ${config.dimModelo}D ${config.numCamadas}L ${config.numCabecas}H`);
     }
-    return m;
-  }
-  modelo.embedding = carregarMatriz(leitor.vocabTam, leitor.dimModelo);
-  // camadas
-  for(let i=0; i<leitor.numCamadas; i++) {
-    const bloco = modelo.camadas[i];
-    // atenção
-    bloco.atencao.pq = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
-    bloco.atencao.pk = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
-    bloco.atencao.pv = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
-    bloco.atencao.ps = carregarMatriz(leitor.dimModelo, leitor.dimModelo);
-    
-    bloco.atencao.bq = carregarVetor(leitor.dimModelo);
-    bloco.atencao.bk = carregarVetor(leitor.dimModelo);
-    bloco.atencao.bv = carregarVetor(leitor.dimModelo);
-    bloco.atencao.bs = carregarVetor(leitor.dimModelo);
-    // FFN
-    bloco.ffn.p1 = carregarMatriz(leitor.dimFFN, leitor.dimModelo);
-    bloco.ffn.b1 = carregarVetor(leitor.dimFFN);
-    bloco.ffn.p2 = carregarMatriz(leitor.dimModelo, leitor.dimFFN);
-    bloco.ffn.b2 = carregarVetor(leitor.dimModelo);
-    // normalização
-    bloco.norm1.gamma = carregarVetor(leitor.dimModelo);
-    bloco.norm1.beta = carregarVetor(leitor.dimModelo);
-    bloco.norm2.gamma = carregarVetor(leitor.dimModelo);
-    bloco.norm2.beta = carregarVetor(leitor.dimModelo);
-  }
-  // normalização final
-  modelo.normFinal.gamma = carregarVetor(leitor.dimModelo);
-  modelo.normFinal.beta = carregarVetor(leitor.dimModelo);
-  // cabeça LM
-  modelo.cabecaLM = carregarMatriz(leitor.vocabTam, leitor.dimModelo);
-  modelo.biasCabeca = carregarVetor(leitor.vocabTam);
-  // treinador
-  const treinador = new Treinador(modelo);
-  treinador.historico = leitor.historico;
-  console.log(`Modelo carregado: ${leitor.vocabTam} tokens, ${leitor.numCamadas} camadas`);
-  return criarGSA(null, {
-    modelo,
-    tokenizador,
-    treinador
-  });
+    const floatBuffer = new Float32Array(buffer.buffer,leitor.byteLength,(buffer.byteLength-leitor.byteLength)/Float32Array.BYTES_PER_ELEMENT
+    );
+    let pos = 0;
+    const modelo = new GSA({...config, vocabTam, seqMaxima});
+    // embeddings
+    for(let i=0; i<vocabTam; i++) {
+      for(let j=0;j<dimModelo;j++)modelo.embedding.embeddings[i][j]=floatBuffer[pos++];
+    }
+    // carrega camadas
+    for(let i=0; i<numCamadas; i++) {
+        const bloco = modelo.camadas[i];
+        // atenção
+        carregarMatriz(bloco.atencao.pq, floatBuffer, pos); pos += dimModelo*dimModelo;
+        carregarMatriz(bloco.atencao.pk, floatBuffer, pos); pos += dimModelo*dimModelo;
+        carregarMatriz(bloco.atencao.pv, floatBuffer, pos); pos += dimModelo*dimModelo;
+        carregarMatriz(bloco.atencao.ps, floatBuffer, pos); pos += dimModelo*dimModelo;
+        carregarVetor(bloco.atencao.bq, floatBuffer, pos); pos += dimModelo;
+        carregarVetor(bloco.atencao.bk, floatBuffer, pos); pos += dimModelo;
+        carregarVetor(bloco.atencao.bv, floatBuffer, pos); pos += dimModelo;
+        carregarVetor(bloco.atencao.bs, floatBuffer, pos); pos += dimModelo;
+        // FFN
+        carregarMatriz(bloco.ffn.p1, floatBuffer, pos); pos += dimFFN*dimModelo;
+        carregarMatriz(bloco.ffn.p2, floatBuffer, pos); pos += dimModelo*dimFFN;
+        carregarVetor(bloco.ffn.b1, floatBuffer, pos); pos += dimFFN;
+        carregarVetor(bloco.ffn.b2, floatBuffer, pos); pos += dimModelo;
+        // normalização
+        carregarVetor(bloco.norm1.gamma, floatBuffer, pos); pos += dimModelo;
+        carregarVetor(bloco.norm1.beta, floatBuffer, pos); pos += dimModelo;
+        carregarVetor(bloco.norm2.gamma, floatBuffer, pos); pos += dimModelo;
+        carregarVetor(bloco.norm2.beta, floatBuffer, pos); pos += dimModelo;
+    }
+    // normalização final
+    carregarVetor(modelo.normFinal.gamma, floatBuffer, pos); pos += dimModelo;
+    carregarVetor(modelo.normFinal.beta, floatBuffer, pos); pos += dimModelo;
+    // camada de saída
+    carregarMatriz(modelo.cabecaSaida.p, floatBuffer, pos); pos += vocabTam * dimModelo;
+    carregarVetor(modelo.cabecaSaida.b, floatBuffer, pos); pos += vocabTam;
+    console.log(`Modelo carregado: ${caminhoArquivo} [${floatBuffer.length} parâmetros]`);
+    return criarGSA(null, { modelo });
 }
-
+function salvarMatriz(m, floats) {
+  for(let i=0; i<m.length; i++) {
+    for(let j=0;j<m[i].length;j++)floats.push(m[i][j]);
+  }
+}
+function salvarVetor(v,floats){for(let i=0; i<v.length;i++)floats.push(v[i]);}
+function carregarMatriz(m, buffer, ini) {
+  let pos = ini;
+  for(let i=0; i<m.length; i++) {
+    for(let j=0;j<m[i].length;j++)m[i][j]=buffer[pos++];
+  }
+}
 function mostrarEstatisticas(gsa) {
   console.log('\n=== CONFIG DO MODELO ===');
   console.log(`  Tamanho do vocabulário: ${gsa.tokenizador.vocabTam}`);
