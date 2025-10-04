@@ -297,7 +297,9 @@ function clipVetor(v, limite) {
 function heapUsado(){console.log(`Heap: ${process.memoryUsage().heapUsed>>20}MB`);}
 function arraysIguais(a,b){return JSON.stringify(a)===JSON.stringify(b);}
 function limparGrad(grad){return grad.map(l=>l.map(v=>isFinite(v)?v:0));}
-function eNaN(tensor, nome, classe, parar=true) {
+//
+function eNaN(tensor, nome, classe, parar=true, treino=true) {
+    if(treino) return;
   for(let i=0; i<tensor.length; i++) {
     if(parar && tensor[0][0]==undefined) {
         if(isNaN(tensor[i])) throw new Error(`[${classe}] ${nome} contém NaN em [${i}]`);
@@ -385,6 +387,7 @@ class CamadaAtencao {
     this.cache = {};
     if(this.dimModelo%this.numCabecas != 0) throw new Error(`dimModelo (${this.dimModelo}) não divisível por numCabecas (${this.numCabecas})`);
   }
+
   propagar(x, mascara=null, treino=true) {
     x.forEach((linha, i) => {if(linha.length !== this.dimModelo) throw new Error(`[CamadaAtencao] x[${i}] tem tamanho inválido: ${linha.length}, esperado: ${this.dimModelo}`);});
     eNaN(x, "x", "CamadaAtencao");
@@ -397,9 +400,9 @@ class CamadaAtencao {
     eNaN(this.ps, "ps", "CamadaAtencao");
     this.bs.forEach((v, i) => {if(!isFinite(v)) throw new Error(`bs contém NaN ou infinito em ${i}: ${v}`);});
     const seqTam = x.length;
-    const q = x.map(seq=>somarVetores(aplicarMatriz(this.pq, seq), this.bq));
-    const k = x.map(seq => somarVetores(aplicarMatriz(this.pk, seq), this.bk));
-    const v = x.map(seq => somarVetores(aplicarMatriz(this.pv, seq), this.bv));
+    const q = this.calcularProjecao(x, this.pq, this.bq);
+    const k = this.calcularProjecao(x, this.pk, this.bk);
+    const v = this.calcularProjecao(x, this.pv, this.bv);
     const qCab = this.dividirCabecas(q);
     const kCab = this.dividirCabecas(k);
     const vCab = this.dividirCabecas(v);
@@ -610,6 +613,21 @@ class CamadaAtencao {
   juntarCabecas(cabecas) {
     return cabecas[0].map((_, i)=>cabecas.reduce((seq, o)=>seq.concat(o[i]), []));
   }
+  calcularProjecao(x, pesos, bias) {
+      const resultado = new Array(x.length);
+      for(let i = 0; i < x.length; i++) {
+          resultado[i] = new Float32Array(pesos[0].length);
+          for(let j = 0; j < pesos.length; j++) {
+              for(let k = 0; k < pesos[j].length; k++) {
+                  resultado[i][k] += x[i][j] * pesos[j][k];
+              }
+          }
+          for(let k = 0; k < bias.length; k++) {
+              resultado[i][k] += bias[k];
+          }
+      }
+      return resultado;
+  }
 }
 class CamadaFFN {
   constructor(dimModelo, dimFFN, taxaDropout=0.1) {
@@ -633,7 +651,7 @@ class CamadaFFN {
   propagar(x, treino=true) {
     const z1 = x.map(seq=>aplicarMatriz(this.p1, seq));
     const lin1 = z1.map((seq, i)=>somarVetores(seq, this.b1));
-    const ativ1 = lin1.map(seq=>seq.map(ReLU));
+    const ativ1 = lin1.map(seq=>seq.map(GELU));
     
     let camada1 = ativ1;
     if(treino) camada1 = dropout(ativ1, this.taxaDrop);
@@ -1188,16 +1206,20 @@ class GSA {
   }
 }
 class Treinador {
-  constructor(modelo, taxaAprendizado=0.0001) {
+  constructor(modelo, taxaAprendizado=0.001, gradClip=1.0) {
     this.modelo = modelo;
-    this.modelo.taxa = taxaAprendizado;
-    this.historico = [];
-    this.taxaInicial = 0.1;
-    this.idFIM = 2;
+    this.otimizadorTaxa = new genTaxaAprendizado(taxaAprendizado);
+    this.gradClip = gradClip;
+    this.historico = {
+      perdas: [],
+      taxas: [],
+      gradNorm: []
+    };
   }
   treinar(dados, epocas=10, tamanhoLote=8) {
     this.idFIM = gsa.tokenizador.tokenPraId.get('<FIM>') || 2;
     for(let epoca=0; epoca<epocas; epoca++) {
+      this.epocas = epoca + 1;
       let perdaTotalEpoca = 0;
       let totalTokensEpoca = 0;
       let numLotes = 0;
@@ -1208,10 +1230,10 @@ class Treinador {
         totalTokensEpoca += tokensNoLote;
         console.log(`Época ${epoca+1}/${epocas}, Lote ${numLotes}, Perda: ${perdaLote.toFixed(4)}, Taxa: ${this.modelo.taxa.toFixed(4)}`);
         console.log("\nAmostra \"Olá\": ", gsa.gerar("Olá", 20));
-        console.log("\nAmostra \"Oi\": ", gsa.gerar("Oi", 20));
+        console.log("Amostra \"Oi\": ", gsa.gerar("Oi", 20));
         console.log("Amostra \"O plasma\": ", gsa.gerar("O plasma", 20));
         console.log("Amostra \"O hidrogênio é\": ", gsa.gerar("O hidrogênio é", 20)+"\n");
-        salvar(gsa, "modelo-"+epoca+"-"+numLotes+"_"+perdaLote.toFixed(4)+".gsa");
+        salvar(gsa, "GSA/modelo-"+epoca+"-"+numLotes+"_"+perdaLote.toFixed(4)+".gsa");
         numLotes++;
       }
       const perdaMedia=totalTokensEpoca>0?perdaTotalEpoca/totalTokensEpoca:0;
@@ -1220,7 +1242,7 @@ class Treinador {
       if(epoca%1==0) {
         salvar(gsa, "modelo-"+epoca+".gsa");
         console.log("\nAmostra \"olá\": ", gsa.gerar("olá", 20));
-        console.log("\nAmostra \"oi\": ", gsa.gerar("oi", 20));
+        console.log("Amostra \"oi\": ", gsa.gerar("oi", 20));
         console.log("Amostra \"tudo bem?\": ", gsa.gerar("tudo bem?", 20));
         console.log("Amostra \"quem é você?\": ", gsa.gerar("quem é você?", 20)+"\n");
       }
@@ -1239,7 +1261,9 @@ class Treinador {
   treinarLote(lote, epoca) {
     const idFIM = gsa.tokenizador.tokenPraId.get('<FIM>');
     let perdaTotal = 0;
+    let gradNormAcumulado = 0;
     let totalTokens = 0;
+    if(global.gc) global.gc();
     for(const seq of lote) {
       const posFIM = seq.indexOf(this.idFIM);
       const seqValida = posFIM >= 0 ? seq.slice(0, posFIM+1) : seq;
@@ -1252,19 +1276,98 @@ class Treinador {
       const sVerdade = esperado.map((t, i)=>oneHot(t, this.modelo.vocabTam));
       // gradientes
       let dLogits=sVerdade.map((s,i)=>derivadaEntropiaCruzada(s,probs[i]));
-      dLogits = dLogits.map(vetor=>clipVetor(vetor, 1.0));
+      dLogits = dLogits.map(vetor => this.clipGradiente(vetor, this.gradClip));
+      
+      const gradNorm = this.calcularNormaGradiente(dLogits);
+      gradNormAcumulado += gradNorm;
+
       this.modelo.retropropagar(dLogits);
-      // calcula perda pra cada posição
+      
       for(let pos=0; pos<sVerdade.length; pos++) {
-        if(esperado[pos]===idFIM) continue; // Ignorar token FIM
+        if(esperado[pos]===idFIM) continue; // ignora token FIM
         perdaTotal += entropiaCruzada(sVerdade[pos], probs[pos]);
       }
       totalTokens += sVerdade.length;
     }
-    const perdaMedia = totalTokens>0 ? perdaTotal/totalTokens : 0;
-    return {perdaLote: perdaMedia, tokensNoLote: totalTokens};
+    if(global.gc) global.gc();
+    
+    const perdaMedia = totalTokens > 0 ? perdaTotal / totalTokens : 0;
+    const gradNormMedio = gradNormAcumulado / lote.length;
+    
+    this.modelo.taxa = this.otimizadorTaxa.atualizar(perdaMedia, lote.length);
+    
+    this.historico.perdas.push(perdaMedia);
+    this.historico.taxas.push(this.modelo.taxa);
+    this.historico.gradNorm.push(gradNormMedio);
+
+    return { perdaLote: perdaMedia, tokensNoLote: totalTokens, gradNorm: gradNormMedio };
+  }
+  clipGradiente(grad, maxNorm) {
+    const norma = Math.sqrt(grad.reduce((s, x) => s + x * x, 0));
+    if(norma > maxNorm) {
+      const fator = maxNorm / norma;
+      return grad.map(x => x * fator);
+    }
+    return grad;
+  }
+  calcularNormaGradiente(gradientes) {
+    let somaQuadrados = 0;
+    let totalParams = 0;
+    
+    gradientes.forEach(vetor => {
+      vetor.forEach(val => {
+        somaQuadrados += val * val;
+        totalParams++;
+      });
+    });
+    return Math.sqrt(somaQuadrados)/Math.max(1, totalParams);
+  }
+  plotarHistorico() {
+    console.log('\n=== HISTÓRICO DE TREINO ===');
+    console.log('Época\tPerda\t\tTaxa\t\tGradNorm');
+    this.historico.perdas.forEach((perda, i) => {
+      if(i % 10 === 0) {
+        console.log(`${i}\t${perda.toFixed(4)}\t${this.historico.taxas[i].toFixed(6)}\t${this.historico.gradNorm[i].toFixed(6)}`);
+      }
+    });
   }
 }
+class genTaxaAprendizado {
+  constructor(taxaInicial = 0.001, paciencia = 5, fatorReducao = 0.5, passosAquecidos = 1000) {
+    this.taxaInicial = taxaInicial;
+    this.taxaAtual = taxaInicial;
+    this.paciencia = paciencia;
+    this.fatorReducao = fatorReducao;
+    this.passosAquecidos = passosAquecidos;
+    this.melhorPerda = Infinity;
+    this.contadorPaciencia = 0;
+    this.passo = 0;
+  }
+  atualizar(perda, sequenciasProcessadas=1) {
+    this.passo += sequenciasProcessadas;
+    if(this.passo < this.passosAquecidos) {
+      this.taxaAtual = this.taxaInicial * (this.passo / this.passosAquecidos);
+      return this.taxaAtual;
+    }
+    if(perda < this.melhorPerda - 1e-4) {
+      this.melhorPerda = perda;
+      this.contadorPaciencia = 0;
+    } else {
+      this.contadorPaciencia++;
+      if(this.contadorPaciencia >= this.paciencia) {
+        this.taxaAtual *= this.fatorReducao;
+        this.contadorPaciencia = 0;
+        console.log(`[TAXA] Reduzindo para: ${this.taxaAtual.toFixed(6)}`);
+      }
+    }
+    return this.taxaAtual;
+  }
+  reiniciar() {
+    this.contadorPaciencia = 0;
+    this.melhorPerda = Infinity;
+  }
+}
+
 class TreinadorBPE {
   constructor(numMerges=500, logIntervalo=0.1) {
     this.numMerges = numMerges;
@@ -1339,7 +1442,7 @@ class TreinadorBPE {
   }
 }
 function criarGSA(textoTreinamento, config={}) {
-  const caminhoArquivo = "margesBPE.gsa";
+  const caminhoArquivo = "GSA/margesBPE.gsa";
   let tokenizador = null;
   let merges = [];
   if(fs.existsSync(caminhoArquivo)) {
@@ -1384,6 +1487,8 @@ function criarGSA(textoTreinamento, config={}) {
     seqMaxima: config.seqMaxima || 512,
     taxaDropout: config.taxaDropout || 0.1,
     taxaDropoutEmbed: config.taxaDropoutEmbed || 0.1,
+    passosAquecidos: config.passosAquecidos || 1000,
+    gradClip: config.gradClip || 0.5,
     ...config
   };
   const modelo = config.modelo || new GSA(configuracao);
@@ -1403,13 +1508,15 @@ const rl = rd.createInterface({
   output: process.stdout
 });
 const mConfig = {
-  dimModelo: 128,
-  numCamadas: 3,
-  numCabecas: 4,
-  dimFFN: 128*2,
-  seqMaxima: 526,
-  taxaAprendizado: 0.0001,
-  taxaDropout: 0.05
+  dimModelo: 64,
+  numCamadas: 2,
+  numCabecas: 2,
+  dimFFN: 128,
+  seqMaxima: 128,
+  taxaAprendizado: 0.001,
+  taxaDropout: 0.1,
+  gradClip: 0.5,
+  passosAquecidos: 1000
 };
 const estudo = [
   "fisica",
@@ -1427,8 +1534,11 @@ const estudo = [
   "CSS",
   "JS",
   "C",
-  "wik",
-  "conversa"
+  "CPP",
+  "FPB",
+  "wiki",
+  "conversa",
+  "ALVA"
 ];
 let treino = "";
 const textos = [];
@@ -1440,7 +1550,7 @@ for(let i=0; i<estudo.length; i++) {
     console.log("[MATERIA]: +"+estudo[i]);
   } else console.log("[MATERIA]: NÃO EXISTE "+estudo[i]+".txt");
 }
-// fs.writeFileSync("treino.txt", treino, "utf-8");
+fs.writeFileSync("treino.txt", treino, "utf-8");
 console.log("[DADOS DE TREINO]: Concluídos");
 // treino = fs.readFileSync("treino.txt", "utf-8");
 function prepararDados(texto, tokenizador, seqTam=32) {
@@ -1520,7 +1630,11 @@ function executarTeste() {
     if(entrada.toLowerCase()=='s'){console.log('> Criando modelo...');
       gsa = criarGSA(treino, mConfig);
       treinarNovo();
-    } else{gsa = carregar("modelo.gsa", mConfig);conversa();}});
+    } else{
+        gsa = carregar("modelo.gsa", mConfig);
+        conversa();
+    }
+  });
 }
 function treinarNovo() {
   console.log(`> Vocabulário criado com ${gsa.tokenizador.vocabTam} tokens`);
@@ -1668,7 +1782,15 @@ function salvarMatriz(m, floats) {
     for(let j=0;j<m[i].length;j++)floats.push(m[i][j]);
   }
 }
-function salvarVetor(v,floats){for(let i=0; i<v.length;i++)floats.push(v[i]);}
+function salvarVetor(v,floats) {
+    for(let i=0; i<v.length;i++)floats.push(v[i]);
+}
+
+function carregarVetor(v, buffer, ini) {
+  let pos = ini;
+  for(let i=0;i<v[i].length;i++)v[i]=buffer[pos++];
+}
+
 function carregarMatriz(m, buffer, ini) {
   let pos = ini;
   for(let i=0; i<m.length; i++) {
@@ -1696,5 +1818,4 @@ function mostrarEstatisticas(gsa) {
     console.log(`Melhoria: ${((perdaInicial-perdaFinal)/perdaInicial*100).toFixed(2)}%`);
   }
 }
-
 executarTeste();
