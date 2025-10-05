@@ -8,7 +8,7 @@ Softmax Lote:
 0.0900306 0.244728 0.665241
 0.0900306 0.665241 0.244728
 Argmax: 2
-Add Ruido: 1.00909 2.00958 3.0043
+Add Ruido: 0.992911 1.99559 2.99761
 
 === TESTES ERRO ===
 
@@ -27,7 +27,7 @@ contrastivaPerda (rotulo=0): 0.858579
 
 L1 Regularization: [0.1 -0.1 0 0.1 -0.1 0.1 ]
 L2 Regularization: [0.1 -0.2 0 0.3 -0.4 0.5 ]
-Dropout: [1.42857 2.85714 4.28571 5.71429 ]
+Dropout: [1.42857 2.85714 4.28571 0 ]
 Normalização Entrada: [0 0.25 0.5 0.75 1 ]
 Normalização Z: [-1.41421 -0.707107 0 0.707107 1.41421 ]
 Acurácia: 1
@@ -40,17 +40,17 @@ ROC AUC: 0.75
 
 === TESTES PESOS ===
 
-Xavier: -0.369862 0.697143 0.0733716 0.541364 -0.516041 1.00259
+Xavier: 0.509198 -0.716478 0.710549 0.601697 0.715746 0.989998
 attPesos: 0.998 1.996 2.994 3.992
 
 === TESTES MATRIZES ===
 
 Tensor 3D:
-0.0141708 -0.0640331
--0.0539001 0.0798816
+0.044664 0.0468192
+0.0402934 0.0539193
 
--0.0129107 -0.0875237
-0.0124384 -0.0810789
+0.00617844 -0.071937
+0.0711502 0.0347569
 
 Zeros 3D:
 0 0
@@ -60,62 +60,102 @@ Zeros 3D:
 0 0
 
 Mapear 3D (x2):
-0.0283415 -0.128066
--0.1078 0.159763
+0.0893281 0.0936384
+0.0805867 0.107839
 
--0.0258215 -0.175047
-0.0248767 -0.162158
+0.0123569 -0.143874
+0.1423 0.0695139
 
 Soma 3D:
-0.0141708 -0.0640331
--0.0539001 0.0798816
+0.044664 0.0468192
+0.0402934 0.0539193
 
--0.0129107 -0.0875237
-0.0124384 -0.0810789
+0.00617844 -0.071937
+0.0711502 0.0347569
 
 Matriz 2x3:
--0.00504181 0.0437665 0.0188061
-0.058914 0.00328852 -0.00152759
+-0.0277103 -0.0166542 0.0130656
+0.0150745 0.0342079 -0.0606183
 Produto Externo:
 3 4
 6 8
 Soma Matriz:
--0.0833202 -0.023815 -0.00928655
-0.020884 -0.0443709 0.0161409
+0.0172095 -0.0786023 0.0623251
+-0.00888482 -0.0218637 -0.0573466
 Multiplicação Matrizes:
--0.00232348 6.614e-05
--0.00330483 -0.000822332
+0.000803531 -0.00349817
+-0.00279136 0.00528195
 
 === TESTE - APRENDIZADO IDENTIDADE ===
 
 Treinando função identidade...
 Época   Erro Médio
 ------  ----------
-0       0.413091
-50      0.0017233
-100     0.000421031
-150     0.000322356
-200     0.000270761
-250     0.000234393
+0       0.511701
+50      0.00201309
+100     0.000549647
+150     0.000419144
+200     0.000338164
+250     0.000283156
 
 --- RESULTADOS ---
-Erro final: 0.0113144
-Tempo: 1149 ms
-Redução: 99.9497%
+Erro final: 0.0121717
+Tempo: 1155 ms
+Redução: 99.9522%
 🎉 EXCELENTE: Aprendizado quase perfeito!
 
 📊 Comparação (primeira amostra):
-Entrada[0]:  -0.661 → Saída:  -0.639 (Esperado:  -0.661) ✓
-Entrada[1]:   0.269 → Saída:   0.264 (Esperado:   0.269) ✓
-Entrada[2]:   0.629 → Saída:   0.634 (Esperado:   0.629) ✓
+Entrada[0]:   0.888 → Saída:   0.847 (Esperado:   0.888) ✓
+Entrada[1]:   0.621 → Saída:   0.620 (Esperado:   0.621) ✓
+Entrada[2]:  -0.489 → Saída:  -0.500 (Esperado:  -0.489) ✓
 
 === TESTE DE DESEMPENHO ===
 
 Config: Lote=16, Entrada=64, Oculto=128
-Tempo total: 310 ms
-Tempo/iteração: 31 ms
-Performance: 16.9125 MFLOPS
-Velocidade atual: ~25.8065x
+Tempo total: 308 ms
+Tempo/iteração: 30 ms
+Performance: 17.0223 MFLOPS
+Velocidade atual: ~25.974x
+
+=== TESTE AVANÇADO - CAMADA CONVOLUCIONAL ===
+
+🔍 TESTE 1: Detecção de Bordas
+Entrada (borda horizontal):
+0 0 0 0 0
+0 0 0 0 0
+1 1 1 1 1
+0 0 0 0 0
+0 0 0 0 0
+Saída (detecção de bordas):
+0 0 0 0 0
+2 3 3 3 2
+0 0 0 0 0
+0 0 0 0 0
+0 0 0 0 0
+✅ DETECÇÃO DE BORDAS FUNCIONANDO
+🎯 TESTE 2: Aprendizado de Padrões Convolucionais
+Época 0 - Erro: 17.6506
+Época 20 - Erro: 6.43157
+Época 40 - Erro: 5.81934
+Época 60 - Erro: 5.56772
+Época 80 - Erro: 5.50829
+Época 100 - Erro: 5.50047
+Época 120 - Erro: 5.50006
+Época 140 - Erro: 5.50001
+Época 160 - Erro: 5.5
+Época 180 - Erro: 5.5
+Erro final: 6.00111 | ⚠️  APRENDIZADO PARCIAL
+
+⚡ TESTE 3: Performance com Dimensões Reais
+Processamento de 8 imagens 32x32x3 → 16 filtros
+Tempo total: 505ms
+Performance: 14.0156 MFLOPS
+✅ PERFORMANCE ADEQUADA
+
+📐 TESTE 4: Verificação de Dimensões
+Entrada 28x28x1 → Saída 26x26x8 - ✅
+Entrada 32x32x3 → Saída 32x32x16 - ✅
+Entrada 64x64x3 → Saída 30x30x32 - ✅
 
 === TESTES TOKENIZADOR BPE ===
 
@@ -124,7 +164,7 @@ Texto: olá mundo
 Codificado: 3 14 4 10 20 5 6 7 12 3
 Decodificado: olá mundo
 
-real    0m1.482s
-user    0m1.471s
-sys     0m0.011s
+real    0m2.290s
+user    0m2.282s
+sys     0m0.007s
 ~ $

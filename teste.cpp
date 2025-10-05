@@ -4,6 +4,7 @@
 int main() {
     testeU(); // testa todos os utilitários
     testeCD(); // testa a camada densa
+    testeCC(); // testa a camada convolucional
     testeT(); // testa o tokenizador
-  return 0;
+    return 0;
 }
