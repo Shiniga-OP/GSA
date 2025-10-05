@@ -20,7 +20,6 @@ int main() {
     testeT(); // testa o tokenizador
     return 0;
 }
-
 ```
 
 implementação feita do zero, sem bibliotecas de IA prontas.
