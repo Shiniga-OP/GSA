@@ -1,26 +1,24 @@
 # GSA
-GSA (Gerador de Sequências Autônomo). Arquitetura de Rede Neural baseada em Transformer, criada para ser compacta e leve em um ambiente limitado. Sem uso de bibliotecas externas.
+em desenvolvimento com a biblioteca própria.
 
-## sobre os arquivos
-a implementação em JS é a implementação mais perto de uma IA real, o GSA é um modelo inacabado, e por ser muito complexo, acaba não aprendendo mais do que padrões simples de linguagem (ou nem isso), seu aprendizado fica estagnado depois de algumas épocas e lotes de treino.
+## conteúdo:
+1. ativações: degrau, sigmoid, tanh, ReLU, GELU, e mais, + deverivadas.
+2. tokenizadores: tokenzador sub palavra.
+3. utilitários: pesos, atualização de pesos, perda, erro, saída, métricas, matrizes 2D/3D + vetores.
+4. camaadas: camada densa
 
-a o arquivo C é uma implementação de parte da minha biblioteca de Redes Neurais, uma tentativa de ganhar mais desempenho utilizando baixo nível, mas incompleta.
+## para testar:
 
-na pasta "biblis" você pode encontrar os tokenizadores que fiz, e em "util.js" você pode encontrar os utilitários (não garanto que estejam atualizados)
+```Cpp
+#include "biblis/toke.h"
+#include "biblis/camada.h"
 
-## conteúdo 
+int main() {
+  testeU(); // testa todos os utilitários
+  testeCD(); // testa a camada densa
+  testeT(); // testa o tokenizador
+  return 0;
+}
+```
 
-você pode encontrar no arquivo JS:
-
-Tokenizador SubPalavra.
-Camada de normalização.
-Camada de atenção.
-Camada feedforward.
-Bloco Transformer.
-Treinador do tokenizador e salvamento com bin das merges.
-Modelo GSA padrão.
-Treinador do modelo GSA.
-Cálculo de parâmetros.
-
-## sobre o futuro
-esse é meu modelo de IA mais complexo e maior, utilizando tudo que eu aprendi sobre IA nos últimos anos menos Aprendizado Por Reforço, então talvez algum dia eu o atualize para funcionar corretamente.
+implementação feita do zero, sem bibliotecas de IA prontas.
