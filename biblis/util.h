@@ -357,7 +357,7 @@ std::vector<float> addRuido(const std::vector<float>& v, float intenso = 0.01f) 
     return res;
 }
 
-// funções matriz 3D
+// funções tensores 3D
 std::vector<std::vector<std::vector<float>>> tensor3D(int p, int l, int c, float escala = 0.1f) {
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -404,7 +404,36 @@ std::vector<std::vector<std::vector<float>>> mult3DporEscalar(const std::vector<
     }
     return res;
 }
-
+std::vector<std::vector<std::vector<float>>> tensorZeros3D(int l, int c, int p) {
+    return std::vector<std::vector<std::vector<float>>>(l, std::vector<std::vector<float>>(c, std::vector<float>(p, 0.0f)));
+}
+std::vector<std::vector<float>> aplicarMatrizLote(const std::vector<std::vector<float>>& m, const std::vector<std::vector<float>>& v) {
+    if(m[0].size() != v[0].size()) {
+        throw std::invalid_argument("Dimensões incompatíveis em aplicarMatrizLote");
+    }
+    std::vector<std::vector<float>> res(v.size(), std::vector<float>(m.size(), 0.0f));
+    
+    for(size_t i = 0; i < v.size(); ++i) {
+        for(size_t j = 0; j < m.size(); ++j) {
+            for(size_t k = 0; k < m[0].size(); ++k) {
+                res[i][j] += m[j][k] * v[i][k];
+            }
+        }
+    }
+    return res;
+}
+std::vector<std::vector<float>> somarVetorMatriz(const std::vector<std::vector<float>>& m, const std::vector<float>& v) {
+    if(m.size() != v.size()) {
+        throw std::invalid_argument("Dimensões incompatíveis em somarVetorMatriz");
+    }
+    std::vector<std::vector<float>> resultado = m;
+    for(size_t i = 0; i < m.size(); ++i) {
+        for(size_t j = 0; j < m[i].size(); ++j) {
+            resultado[i][j] += v[i];
+        }
+    }
+    return resultado;
+}
 // funções matriz 2D
 std::vector<std::vector<float>> matriz(int l, int c, float escala = 0.1f) {
     std::random_device rd;
