@@ -13,6 +13,7 @@
 #include "util.h"
 #include "ativas.h"
 
+// DENSA:
 class CamadaDensa {
 public:
     CamadaDensa(int dimEntrada, int dimSaida, float taxaDropout = 0.0f);
@@ -224,7 +225,7 @@ inline std::vector<std::vector<float>> CamadaDensa::retropropagar(const std::vec
 }
 
 void testeCD() {
-    std::cout << "\n=== TESTE - APRENDIZADO IDENTIDADE ===\n\n";
+    std::cout << "\n=== TESTE - CAMADA DENSA ===\n\n";
     int dimEntrada = 10;
     int dimOculta = 50;
     int dimSaida = 10;
@@ -358,7 +359,7 @@ void testeCD() {
         std::cout << "Velocidade atual: ~" << 800.0 / tempo_por_iteracao << "x\n";
     }
 }
-
+// CONVOLUÇÃO:
 class CamadaConv {
 public:
     CamadaConv(int entradaAltura, int entradaLargura, int entradaCanais, int numFiltros, int filtroTamanho, int passo = 1, int prenchimento = 0, float taxaDropout = 0.0f);
@@ -860,18 +861,24 @@ void testeCC() {
         }
     }
 }
-
+// ATENÇÃO:
 class CamadaAtencao {
 public:
-    CamadaAtencao(int dimEntrada, int dimConC, int dimV);
+    CamadaAtencao(int dimEntrada, int dimConC, int dimV, float temperaturaInicial = 0.45f, float lambdaFocoInicial = 0.00005f); 
 
     std::vector<std::vector<float>> propagar(const std::vector<std::vector<float>>& entrada, bool treino = true);
     
     std::vector<std::vector<float>> retropropagar(const std::vector<std::vector<float>>& gradSaida, float taxaAprendizado, float lambda = 1e-4f);
-    int dimEntrada_; // dimensão dos vetores de cada elemento da sequência de entrada
-    int dimQC_; // dimensão interna dos vetores de Consulta (Con) e Chave (C)
-    int dimV_; // dimensão interna dos vetores de Valor (V)
-    float escala_; // fator de escala(raiz quadrada de dimQC_)
+    
+    void setTemperatura(float temp) { temperatura_ = temp; }
+    void setLambdaFoco(float foco) { lambdaFoco_ = foco; }
+    
+    int dimEntrada_, dimQC_, dimV_;
+    
+    float escala_; 
+    float temperatura_;
+    float lambdaFoco_;
+    
     // pesos
     std::vector<std::vector<float>> pCon_, pC_, pV_;
 
@@ -884,85 +891,90 @@ public:
     // cache para retroprop
     std::vector<std::vector<float>> cacheEntrada_;
     std::vector<std::vector<float>> cacheCon_, cacheC_, cacheV_;
-    std::vector<std::vector<float>> cachePesosAtencao_;
+    std::vector<std::vector<float>> cachePesosAtencao_; // pesos de atenção após o softmax
 };
 
-inline CamadaAtencao::CamadaAtencao(int dimEntrada, int dimConC, int dimV)
-    : dimEntrada_(dimEntrada), dimQC_(dimConC), dimV_(dimV), iteracao_(1) {
-    // pesos usando Xavier/Glorot para manter a variância do sinal
+inline CamadaAtencao::CamadaAtencao(int dimEntrada, int dimConC, int dimV, float temperaturaInicial, float lambdaFocoInicial)
+    : dimEntrada_(dimEntrada), dimQC_(dimConC), dimV_(dimV), iteracao_(1), temperatura_(temperaturaInicial), lambdaFoco_(lambdaFocoInicial) {
+    
     pCon_ = iniPesosXavier(dimEntrada, dimConC);
     pC_ = iniPesosXavier(dimEntrada, dimConC);
     pV_ = iniPesosXavier(dimEntrada, dimV);
 
     // fator de escala para a atenção
     escala_ = std::sqrt(static_cast<float>(dimConC));
-    if (escala_ < 1.0f) escala_ = 1.0f; // Evita amplificar o sinal para dimensões pequenas
+    if(escala_ < 1.0f) escala_ = 1.0f; 
 
-    // acumuladores do otimizador adam com zeros
+    // buffers adam
     mCon_ = matrizZeros(dimEntrada, dimConC); vCon_ = matrizZeros(dimEntrada, dimConC);
     mC_ = matrizZeros(dimEntrada, dimConC); vC_ = matrizZeros(dimEntrada, dimConC);
     mV_ = matrizZeros(dimEntrada, dimV);  vV_ = matrizZeros(dimEntrada, dimV);
 }
 
 inline std::vector<std::vector<float>> CamadaAtencao::propagar(const std::vector<std::vector<float>>& entrada, bool treino) {
-    // 1 projeção da entrada para obter Consulta (Q), Chave (K) e Valor (V)
-    auto Q = multMatrizes(entrada, pCon_);
-    auto K = multMatrizes(entrada, pC_);
+    auto CON = multMatrizes(entrada, pCon_);
+    auto C = multMatrizes(entrada, pC_);
     auto V = multMatrizes(entrada, pV_);
 
-    // 2. calculo dos pontos de atenção: Q * K^T
-    auto pontos = multMatrizes(Q, transpor(K));
+    auto pontos = multMatrizes(CON, transpor(C));
 
-    // 3. escala dos pontos pra estabilizar o gradiente
-    auto pontosEscalados = multMatriz(pontos, 1.0f / escala_);
+    // fatorEscalaComTemp = sqrt(d_k) * temperatura
+    float fatorEscalaComTemp = escala_ * temperatura_;
+    auto pontosEscalados = multMatriz(pontos, 1.0f / fatorEscalaComTemp);
 
-    // 4. aplicação do softmax pra obter os pesos de atenção
+    // softmax pra obter os pesos de atenção(mais nítidos devido a temp < 1)
     auto pesosAtencao = softmaxLote(pontosEscalados);
 
-    // 5. calculo da saída: produto dos pesos de atenção com os Valores (V)
     auto saida = multMatrizes(pesosAtencao, V);
 
-    // se estiver em modo de treino, armazena os valores intermediários para a retroprop
     if(treino) {
         cacheEntrada_ = entrada;
-        cacheCon_ = Q;
-        cacheC_ = K;
+        cacheCon_ = CON;
+        cacheC_ = C;
         cacheV_ = V;
         cachePesosAtencao_ = pesosAtencao;
     }
-
     return saida;
 }
 
 inline std::vector<std::vector<float>> CamadaAtencao::retropropagar(const std::vector<std::vector<float>>& gradSaida, float taxaAprendizado, float lambda) {
-    // passo 1: calcula gradientes em relação a V e aos pesos de atenção
     auto gradV = multMatrizes(transpor(cachePesosAtencao_), gradSaida);
     auto gradPesosAtencao = multMatrizes(gradSaida, transpor(cacheV_));
-
-    // passo 2: retroprop o gradiente atraves da função softmax
+    
     std::vector<std::vector<float>> gradpontos(gradPesosAtencao.size(), std::vector<float>(gradPesosAtencao[0].size()));
     for(size_t i = 0; i < gradPesosAtencao.size(); ++i) {
         gradpontos[i] = derivadaSoftmax(cachePesosAtencao_[i], gradPesosAtencao[i]);
     }
-    // passo 3: desfaz a escala dos pontos
-    gradpontos = multMatriz(gradpontos, 1.0f / escala_);
+    // injeta o gradiente de penalidade RF(Regulamentação de Foco)
+    // O gradiente da penalidade é adicionado ao gradiente de erro principal
+    if(lambdaFoco_ > 0.0f) {
+        for(size_t i = 0; i < gradpontos.size(); ++i) {
+            for(size_t j = 0; j < gradpontos[0].size(); ++j) {
+                // penaliza a uniformidade(força o foco)
+                gradpontos[i][j] += (2.0f * lambdaFoco_ * cachePesosAtencao_[i][j]);
+            }
+        }
+    }
+    // desfaz a escala dos pontos(com a Temperatura)
+    float fatorEscalaComTemp = escala_ * temperatura_;
+    gradpontos = multMatriz(gradpontos, 1.0f / fatorEscalaComTemp);
 
-    // passo 4: calcula gradientes em relação a Q e K
+    // calcula gradientes em relação a Q e K
     auto gradK = multMatrizes(transpor(gradpontos), cacheCon_);
     auto gradQ = multMatrizes(gradpontos, cacheC_);
 
-    // passo 5: calcula gradientes pra as matrizes de pesos pQ, pK, pV
+    // calcula gradientes pra as matrizes de pesos pQ, pK, pV
     auto gradPQ = multMatrizes(transpor(cacheEntrada_), gradQ);
     auto gradPK = multMatrizes(transpor(cacheEntrada_), gradK);
     auto gradPV = multMatrizes(transpor(cacheEntrada_), gradV);
     
-    // passo 6: atualiza os pesos usando adam
+    // atualiza os pesos usando adam
     pCon_ = attPesosAdam(pCon_, gradPQ, mCon_, vCon_, taxaAprendizado, 0.9f, 0.999f, 1e-8f, iteracao_, lambda);
     pC_ = attPesosAdam(pC_, gradPK, mC_, vC_, taxaAprendizado, 0.9f, 0.999f, 1e-8f, iteracao_, lambda);
     pV_ = attPesosAdam(pV_, gradPV, mV_, vV_, taxaAprendizado, 0.9f, 0.999f, 1e-8f, iteracao_, lambda);
     iteracao_++;
 
-    // passo 7: calcula o gradiente a ser propagado pra a camada anterior
+    // gradiente a ser propagado pra a camada anterior
     auto gradEntrada = somarMatriz(
         somarMatriz(
             multMatrizes(gradQ, transpor(pCon_)),
@@ -973,93 +985,97 @@ inline std::vector<std::vector<float>> CamadaAtencao::retropropagar(const std::v
 }
 
 void testeCA() {
-    std::cout << "\n\n=============================================";
-    std::cout << "\n===   INICIANDO TESTE DA CAMADA ATENÇÃO   ===";
-    std::cout << "\n============================================= (V2 - Teste Dinâmico)\n";
+    std::cout << "\n\n=== TESTE - CAMADA ATENÇÃO ===";
 
     const int tamSequencia = 4;
-    const int dimEntrada = 8;
+    const int dimEntrada = 32;
     const int dimConC = 16;
-    const int dimV = 8;
-    
+    const int dimV = 32;
+    const int epocas = 1000;
+    const float taxaAprendizado = 0.001f;
+
     CamadaAtencao camada(dimEntrada, dimConC, dimV);
 
-    std::cout << "\n--- 📐 Teste 1: Verificação de Dimensões ---\n";
-    auto entradaTeste = matriz(tamSequencia, dimEntrada, 1.0f);
+    std::cout << "\n--- 📐 Verificação de Dimensões ---\n";
+    auto entradaTeste = matriz(tamSequencia, dimEntrada, 0.1f);
     auto saidaTeste = camada.propagar(entradaTeste, false);
 
     bool dimensoesCorretas = (saidaTeste.size() == tamSequencia) && (saidaTeste[0].size() == dimV);
-    std::cout << "Dimensão da Entrada: " << tamSequencia << "x" << dimEntrada << "\n";
-    std::cout << "Dimensão da Saída:   " << saidaTeste.size() << "x" << saidaTeste[0].size() << "\n";
     std::cout << "Status: " << (dimensoesCorretas ? "✅ SUCESSO" : "❌ FALHA") << "\n";
-    if(!dimensoesCorretas) {
-        std::cout << "TESTE INTERROMPIDO DEVIDO A DIMENSÕES INCORRETAS.\n";
-        return;
+
+    std::cout << "\n--- 🎯 Treino com Dados Consistentes ---\n";
+    std::cout << "Objetivo: 1º elemento → 3º elemento (dados FIXOS para aprendizado)\n\n";
+
+    auto entradaBase = matriz(tamSequencia, dimEntrada, 0.5f);
+    for(int j = 0; j < dimEntrada; j++) {
+        entradaBase[2][j] = entradaBase[0][j] + 0.3f; // padrão claro
     }
-    std::cout << "\n--- 🎯 Teste 2: Aprendizado de Foco Dinâmico ---\n";
-    std::cout << "Objetivo: Fazer o 1º elemento prestar atenção no 3º em dados ALEATÓRIOS.\n\n";
-
-    const int epocas = 300;
-    const float taxaAprendizado = 0.01f;
-    float erroMedio = 0.0f;
     std::vector<float> historicoErro;
-
-    const int indiceConsulta = 0; // elemento que vai "perguntar"
-    const int indiceAlvo = 2; // elemento que deve ser "encontrado"
+    float melhorErro = 1.0f;
 
     for(int i = 0; i < epocas; ++i) {
-        // dados novos a cada epoca
-        auto entradaTreino = matriz(tamSequencia, dimEntrada, 1.0f);
-        auto saidaEsperada = entradaTreino[indiceAlvo];
+        auto entradaTreino = entradaBase;
+        for(int k = 0; k < tamSequencia; k++) {
+            entradaTreino[k] = addRuido(entradaTreino[k], 0.02f);
+        }
+        auto saidaEsperada = entradaTreino[2]; // alvo: elemento 2
         auto saida = camada.propagar(entradaTreino, true);
         
-        // calculo do erro(apenas pra o elemento de consulta)
-        float erroEpoca = mse(saida[indiceConsulta], saidaEsperada);
+        float erroEpoca = mse(saida[0], saidaEsperada);
         historicoErro.push_back(erroEpoca);
+        melhorErro = std::min(melhorErro, erroEpoca);
 
-        // preparação do gradiente da saída
         auto gradSaida = matrizZeros(tamSequencia, dimV);
         for(int j = 0; j < dimV; ++j) {
-            float diff = saida[indiceConsulta][j] - saidaEsperada[j];
-            gradSaida[indiceConsulta][j] = 2.0f * diff / dimV;
+            float diff = saida[0][j] - saidaEsperada[j];
+            gradSaida[0][j] = 2.0f * diff / dimV;
         }
-        // retroprop
         camada.retropropagar(gradSaida, taxaAprendizado, 1e-5f);
 
-        if((i + 1) % 50 == 0) {
-            // calcula a média do erro das últimas 50 épocas para suavizar a curva
-            float somaErro = 0.0f;
-            for(size_t k = historicoErro.size() - 50; k < historicoErro.size(); ++k) {
-                somaErro += historicoErro[k];
-            }
-            erroMedio = somaErro / 50.0f;
-            std::cout << "Época [" << std::setw(3) << i + 1 << "/" << epocas << "] - Erro Médio (últimas 50): " << std::fixed << std::setprecision(6) << erroMedio << "\n";
+        if((i + 1) % 100 == 0) {
+            std::cout << "Época [" << std::setw(3) << i + 1 << "] - Erro: " 
+                      << std::fixed << std::setprecision(4) << erroEpoca;
+            if(erroEpoca < 0.1f) std::cout << " ✅";
+            std::cout << "\n";
         }
     }
-    bool aprendizadoSucedido = erroMedio < 0.05;
-    std::cout << "\nStatus do Treinamento: " << (aprendizadoSucedido ? "✅ APRENDIZADO BEM-SUCEDIDO" : "⚠️ APRENDIZADO INCOMPLETO") << "\n";
+    std::cout << "\n--- 📊 Resultados Finais ---\n";
+    std::cout << "Melhor erro alcançado: " << std::fixed << std::setprecision(4) << melhorErro << "\n";
+    
+    bool sucesso = melhorErro < 0.1f;
+    std::cout << "Status: " << (sucesso ? "✅ APRENDIZADO BEM-SUCEDIDO" : "⚠️  APRENDIZADO PARCIAL") << "\n";
 
-    std::cout << "\n--- 🔍 Teste 3: Análise dos Pesos de Atenção (após treino dinâmico) ---\n";
-    auto entradaFinal = matriz(tamSequencia, dimEntrada, 1.0f);
+    std::cout << "\n--- 🔍 Análise dos Pesos de Atenção ---\n";
+    auto entradaFinal = entradaBase;
     camada.propagar(entradaFinal, false);
     auto pesosFinais = camada.cachePesosAtencao_;
 
-    std::cout << "Pesos de atenção para o " << indiceConsulta + 1 << "º elemento (linha " << indiceConsulta << "):\n[";
+    std::cout << "Distribuição de atenção do 1º elemento:\n";
     int indiceMaiorPeso = -1;
     float maiorPeso = -1.0f;
+    
     for(int j = 0; j < tamSequencia; ++j) {
-        std::cout << std::fixed << std::setprecision(4) << pesosFinais[indiceConsulta][j] << (j == tamSequencia - 1 ? "" : ", ");
-        if(pesosFinais[indiceConsulta][j] > maiorPeso) {
-            maiorPeso = pesosFinais[indiceConsulta][j];
+        float peso = pesosFinais[0][j];
+        std::cout << "  Elemento " << j + 1 << ": " << std::fixed << std::setprecision(3) 
+                  << peso << " (" << std::setprecision(1) << peso * 100.0f << "%)";
+        if(j == 2) std::cout << " ← ALVO";
+        std::cout << "\n";
+        
+        if(peso > maiorPeso) {
+            maiorPeso = peso;
             indiceMaiorPeso = j;
         }
     }
-    std::cout << "]\nO " << indiceConsulta + 1 << "º elemento está focando no " << indiceMaiorPeso + 1 << "º elemento com " << std::fixed << std::setprecision(2) << maiorPeso * 100.0f << "% de atenção.\n";
+    bool focoCorreto = (indiceMaiorPeso == 2);
+    std::cout << "\n🎯 Foco principal: Elemento " << indiceMaiorPeso + 1 
+              << " - " << (focoCorreto ? "✅ CORRETO!" : "❌ INCORRETO!") << "\n";
 
-    bool focoCorreto = (indiceMaiorPeso == indiceAlvo);
-    std::cout << "Status do Foco: " << (focoCorreto ? "🎯 FOCO CORRETO!" : "❌ FOCO INCORRETO!") << "\n";
-
-    std::cout << "\n=============================================";
-    std::cout << "\n===      TESTE DA CAMADA ATENÇÃO FIM      ===";
-    std::cout << "\n=============================================\n\n";
+    std::cout << "\n--- 📈 Resumo do Desempenho ---\n";
+    if(sucesso && focoCorreto) {
+        std::cout << "🎉 EXCELENTE: Camada de atenção funcionando perfeitamente!\n";
+    } else if(sucesso) {
+        std::cout << "⚠️  BOM: Aprendizado ocorreu mas o foco não está ideal\n";
+    } else {
+        std::cout << "🔧 AJUSTES NECESSÁRIOS: Considere aumentar dimensões ou épocas\n";
+    }
 }

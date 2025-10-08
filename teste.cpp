@@ -1,5 +1,5 @@
-#include "biblis/toke.h"
 #include "biblis/camadas.h"
+#include "biblis/toke.h"
 
 int main() {
     testeU(); // testa todos os utilitários

@@ -8,7 +8,7 @@ Softmax Lote:
 0.0900306 0.244728 0.665241
 0.0900306 0.665241 0.244728
 Argmax: 2
-Add Ruido: 1.0085 2.00397 3.00195
+Add Ruido: 0.99992 1.99561 2.99289
 
 === TESTES ERRO ===
 
@@ -27,7 +27,7 @@ contrastivaPerda (rotulo=0): 0.858579
 
 L1 Regularization: [0.1 -0.1 0 0.1 -0.1 0.1 ]
 L2 Regularization: [0.1 -0.2 0 0.3 -0.4 0.5 ]
-Dropout: [1.42857 2.85714 4.28571 5.71429 ]
+Dropout: [1.42857 2.85714 4.28571 0 ]
 Normalização Entrada: [0 0.25 0.5 0.75 1 ]
 Normalização Z: [-1.41421 -0.707107 0 0.707107 1.41421 ]
 Acurácia: 1
@@ -40,17 +40,17 @@ ROC AUC: 0.75
 
 === TESTES PESOS ===
 
-Xavier: -0.865947 -0.302418 -0.243812 -0.231176 -0.932953 0.326014
+Xavier: 0.122022 0.50113 0.374269 -0.0639201 -0.0777996 -0.224709
 attPesos: 0.998 1.996 2.994 3.992
 
 === TESTES MATRIZES ===
 
 Tensor 3D:
-0.0937249 0.00961255
-0.0438592 0.0684883
+0.0754597 0.0361966
+-0.0545886 -0.0985919
 
-0.053717 -0.0437279
--0.0612794 0.0328646
+-0.0149719 0.0966729
+-0.0155317 -0.0156174
 
 Zeros 3D:
 0 0
@@ -60,54 +60,54 @@ Zeros 3D:
 0 0
 
 Mapear 3D (x2):
-0.18745 0.0192251
-0.0877183 0.136977
+0.150919 0.0723933
+-0.109177 -0.197184
 
-0.107434 -0.0874557
--0.122559 0.0657292
+-0.0299437 0.193346
+-0.0310635 -0.0312348
 
 Soma 3D:
-0.0937249 0.00961255
-0.0438592 0.0684883
+0.0754597 0.0361966
+-0.0545886 -0.0985919
 
-0.053717 -0.0437279
--0.0612794 0.0328646
+-0.0149719 0.0966729
+-0.0155317 -0.0156174
 
 Matriz 2x3:
--0.0667325 -0.0543039 0.00887326
--0.0192793 0.062623 -0.0252725
+0.00443124 -0.025497 -0.0130253
+0.0542079 0.00610304 -0.0789471
 Produto Externo:
 3 4
 6 8
 Soma Matriz:
--0.0935889 -0.134797 0.0192784
--0.103372 0.0682134 0.0390784
+-0.0256028 -0.0433502 0.00358506
+-0.000244819 -0.0536633 -0.0111435
 Multiplicação Matrizes:
--0.000989086 -0.00680843
--0.00484676 0.000661481
+-0.00106142 0.00180322
+0.00531006 0.0092626
 
-=== TESTE - APRENDIZADO IDENTIDADE ===
+=== TESTE - CAMADA DENSA ===
 
 Treinando função identidade...
 Época   Erro Médio
 ------  ----------
-0       0.559385
-50      0.00221868
-100     0.000803955
-150     0.000633193
-200     0.000522772
-250     0.000444253
+0       0.475437
+50      0.00170279
+100     0.000404913
+150     0.000317491
+200     0.000264992
+250     0.000227257
 
 --- RESULTADOS ---
-Erro final: 0.015199
-Tempo: 1153 ms
-Redução: 99.9308%
+Erro final: 0.0111951
+Tempo: 1146 ms
+Redução: 99.958%
 🎉 EXCELENTE: Aprendizado quase perfeito!
 
 📊 Comparação (primeira amostra):
-Entrada[0]:  -0.570 → Saída:  -0.554 (Esperado:  -0.570) ✓
-Entrada[1]:   0.090 → Saída:   0.086 (Esperado:   0.090) ✓
-Entrada[2]:  -0.975 → Saída:  -0.974 (Esperado:  -0.975) ✓
+Entrada[0]:  -0.850 → Saída:  -0.861 (Esperado:  -0.850) ✓
+Entrada[1]:   0.223 → Saída:   0.212 (Esperado:   0.223) ✓
+Entrada[2]:  -0.444 → Saída:  -0.432 (Esperado:  -0.444) ✓
 
 === TESTE DE DESEMPENHO ===
 
@@ -134,22 +134,22 @@ Saída (detecção de bordas):
 0 0 0 0 0
 ✅ DETECÇÃO DE BORDAS FUNCIONANDO
 🎯 TESTE 2: Aprendizado de Padrões Convolucionais
-Época 0 - Erro: 5.24502
-Época 20 - Erro: 2.28945
-Época 40 - Erro: 1.50675
-Época 60 - Erro: 1.23123
-Época 80 - Erro: 1.10937
-Época 100 - Erro: 1.0514
-Época 120 - Erro: 1.02293
-Época 140 - Erro: 1.00959
-Época 160 - Erro: 1.00371
-Época 180 - Erro: 1.00132
-Erro final: 2.04497 | ⚠️  APRENDIZADO PARCIAL
+Época 0 - Erro: 15.292
+Época 20 - Erro: 6.3131
+Época 40 - Erro: 5.48642
+Época 60 - Erro: 5.02473
+Época 80 - Erro: 4.71408
+Época 100 - Erro: 4.57935
+Época 120 - Erro: 4.53166
+Época 140 - Erro: 4.51402
+Época 160 - Erro: 4.50647
+Época 180 - Erro: 4.50293
+Erro final: 5.07209 | ⚠️  APRENDIZADO PARCIAL
 
 ⚡ TESTE 3: Performance com Dimensões Reais
 Processamento de 8 imagens 32x32x3 → 16 filtros
-Tempo total: 504ms
-Performance: 14.0434 MFLOPS
+Tempo total: 509ms
+Performance: 13.9055 MFLOPS
 ✅ PERFORMANCE ADEQUADA
 
 📐 TESTE 4: Verificação de Dimensões
@@ -158,37 +158,39 @@ Entrada 32x32x3 → Saída 32x32x16 - ✅
 Entrada 64x64x3 → Saída 30x30x32 - ✅
 
 
-=============================================
-===   INICIANDO TESTE DA CAMADA ATENÇÃO   ===
-============================================= (V2 - Teste Dinâmico)
-
---- 📐 Teste 1: Verificação de Dimensões ---
-Dimensão da Entrada: 4x8
-Dimensão da Saída:   4x8
+=== TESTE - CAMADA ATENÇÃO ===
+--- 📐 Verificação de Dimensões ---
 Status: ✅ SUCESSO
 
---- 🎯 Teste 2: Aprendizado de Foco Dinâmico ---
-Objetivo: Fazer o 1º elemento prestar atenção no 3º em dados ALEATÓRIOS.
+--- 🎯 Treino com Dados Consistentes ---
+Objetivo: 1º elemento → 3º elemento (dados FIXOS para aprendizado)
 
-Época [ 50/300] - Erro Médio (últimas 50): 0.436791
-Época [100/300] - Erro Médio (últimas 50): 0.350242
-Época [150/300] - Erro Médio (últimas 50): 0.320522
-Época [200/300] - Erro Médio (últimas 50): 0.297133
-Época [250/300] - Erro Médio (últimas 50): 0.297387
-Época [300/300] - Erro Médio (últimas 50): 0.259765
+Época [100] - Erro: 0.0140 ✅
+Época [200] - Erro: 0.0004 ✅
+Época [300] - Erro: 0.0002 ✅
+Época [400] - Erro: 0.0002 ✅
+Época [500] - Erro: 0.0002 ✅
+Época [600] - Erro: 0.0004 ✅
+Época [700] - Erro: 0.0002 ✅
+Época [800] - Erro: 0.0003 ✅
+Época [900] - Erro: 0.0005 ✅
+Época [1000] - Erro: 0.0010 ✅
 
-Status do Treinamento: ⚠️ APRENDIZADO INCOMPLETO
+--- 📊 Resultados Finais ---
+Melhor erro alcançado: 0.0001
+Status: ✅ APRENDIZADO BEM-SUCEDIDO
 
---- 🔍 Teste 3: Análise dos Pesos de Atenção (após treino dinâmico) ---
-Pesos de atenção para o 1º elemento (linha 0):
-[0.2868, 0.2153, 0.2871, 0.2108]
-O 1º elemento está focando no 3º elemento com 28.71% de atenção.
-Status do Foco: 🎯 FOCO CORRETO!
+--- 🔍 Análise dos Pesos de Atenção ---
+Distribuição de atenção do 1º elemento:
+  Elemento 1: 0.069 (6.9%)
+  Elemento 2: 0.061 (6.1%)
+  Elemento 3: 0.790 (79.0%) ← ALVO
+  Elemento 4: 0.080 (8.0%)
 
-=============================================
-===      TESTE DA CAMADA ATENÇÃO FIM      ===
-=============================================
+🎯 Foco principal: Elemento 3 - ✅ CORRETO!
 
+--- 📈 Resumo do Desempenho ---
+🎉 EXCELENTE: Camada de atenção funcionando perfeitamente!
 
 === TESTES TOKENIZADOR BPE ===
 
@@ -197,7 +199,7 @@ Texto: olá mundo
 Codificado: 3 14 4 10 20 5 6 7 12 3
 Decodificado: olá mundo
 
-real    0m2.483s
-user    0m2.450s
-sys     0m0.032s
+real    0m5.085s
+user    0m5.024s
+sys     0m0.058s
 ~ $

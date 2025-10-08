@@ -1,10 +1,11 @@
+#pragma once
 #include <iostream>
 #include <vector>
-#include <cmath>
 #include <random>
 #include <functional>
 #include <algorithm>
 #include <stdexcept>
+#include <math.h>
 
 void _testeMatrizes();
 
@@ -14,7 +15,7 @@ std::vector<std::vector<float>> iniPesosXavier(int l, int c) {
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
     
-    float limite = std::sqrt(6.0f / (l + c));
+    float limite = sqrt(6.0f / (l + c));
     std::vector<std::vector<float>> pesos(l, std::vector<float>(c));
     
     for(int i = 0; i < l; ++i) {
@@ -28,7 +29,7 @@ std::vector<std::vector<float>> iniPesosHe(int l, int c) {
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(-1.0f, 1.0f);
     
-    float limite = std::sqrt(2.0f / l);
+    float limite = sqrt(2.0f / l);
     std::vector<std::vector<float>> pesos(l, std::vector<float>(c));
     
     for(int i = 0; i < l; ++i) {
@@ -64,8 +65,8 @@ std::vector<std::vector<float>> attPesosMomentum(const std::vector<std::vector<f
 std::vector<std::vector<float>> attPesosAdam(const std::vector<std::vector<float>>& pesos, const std::vector<std::vector<float>>& grad, std::vector<std::vector<float>>& m, std::vector<std::vector<float>>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, int iteracao = 1, float lambda = 0.001f) {
     std::vector<std::vector<float>> nova(pesos.size(), std::vector<float>(pesos[0].size()));
     
-    float fator1 = 1.0f - std::pow(beta1, iteracao);
-    float fator2 = 1.0f - std::pow(beta2, iteracao);
+    float fator1 = 1.0f - pow(beta1, iteracao);
+    float fator2 = 1.0f - pow(beta2, iteracao);
     float umMenosBeta1 = 1.0f - beta1;
     float umMenosBeta2 = 1.0f - beta2;
     
@@ -76,7 +77,7 @@ std::vector<std::vector<float>> attPesosAdam(const std::vector<std::vector<float
             v[i][j] = beta2 * v[i][j] + umMenosBeta2 * g * g;
             float mChapeu = m[i][j] / fator1;
             float vChapeu = v[i][j] / fator2;
-            nova[i][j] = pesos[i][j] - taxa * mChapeu / (std::sqrt(vChapeu) + eps);
+            nova[i][j] = pesos[i][j] - taxa * mChapeu / (sqrt(vChapeu) + eps);
         }
     }
     return nova;
@@ -85,8 +86,8 @@ std::vector<std::vector<float>> attPesosAdam(const std::vector<std::vector<float
 std::vector<float> attPesosAdam1D(std::vector<float>& p, const std::vector<float>& grad, std::vector<float>& m, std::vector<float>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, int t = 1, float lambda = 0.001f) {
     float umMenosBeta1 = 1.0f - beta1;
     float umMenosBeta2 = 1.0f - beta2;
-    float fator1 = 1.0f - std::pow(beta1, t);
-    float fator2 = 1.0f - std::pow(beta2, t);
+    float fator1 = 1.0f - pow(beta1, t);
+    float fator2 = 1.0f - pow(beta2, t);
     
     for(size_t i = 0; i < p.size(); ++i) {
         float g = grad[i] + lambda * p[i];
@@ -94,7 +95,7 @@ std::vector<float> attPesosAdam1D(std::vector<float>& p, const std::vector<float
         v[i] = beta2 * v[i] + umMenosBeta2 * g * g;
         float mChapeu = m[i] / fator1;
         float vChapeu = v[i] / fator2;
-        p[i] -= taxa * mChapeu / (std::sqrt(vChapeu) + eps);
+        p[i] -= taxa * mChapeu / (sqrt(vChapeu) + eps);
     }
     return p;
 }
@@ -150,10 +151,10 @@ std::vector<float> normZPonto(const std::vector<float>& v) {
     float media = soma / v.size();
     
     float variancia = 0.0f;
-    for (float x : v) variancia += std::pow(x - media, 2);
+    for (float x : v) variancia += pow(x - media, 2);
     variancia /= v.size();
     
-    float desvio = std::sqrt(variancia + 1e-8f);
+    float desvio = sqrt(variancia + 1e-8f);
     
     std::vector<float> res;
     for(float x : v) res.push_back((x - media) / desvio);
@@ -195,13 +196,13 @@ float f1Ponto(const std::vector<std::vector<int>>& confusao) {
 
 float mse(const std::vector<float>& saida, const std::vector<float>& esperado) {
     float soma = 0.0f;
-    for(size_t i = 0; i < saida.size(); i++) soma += std::pow(saida[i] - esperado[i], 2);
+    for(size_t i = 0; i < saida.size(); i++) soma += pow(saida[i] - esperado[i], 2);
     return soma / saida.size();
 }
 
 float klDivergencia(const std::vector<float>& p, const std::vector<float>& q) {
     float soma = 0.0f;
-    for(size_t i = 0; i < p.size(); i++) soma += p[i] * std::log((p[i] + 1e-12f) / (q[i] + 1e-12f));
+    for(size_t i = 0; i < p.size(); i++) soma += p[i] * log((p[i] + 1e-12f) / (q[i] + 1e-12f));
     return soma;
 }
 
@@ -232,7 +233,7 @@ float rocAuc(const std::vector<float>& pontos, const std::vector<int>& rotulos) 
 // funções de erro:
 float erroAbsolutoMedio(const std::vector<float>& saida, const std::vector<float>& esperado) {
     float soma = 0.0f;
-    for(size_t i = 0; i < saida.size(); i++) soma += std::abs(saida[i] - esperado[i]);
+    for(size_t i = 0; i < saida.size(); i++) soma += abs(saida[i] - esperado[i]);
     return soma / saida.size();
 }
 
@@ -253,7 +254,7 @@ std::vector<float> derivadaErro(const std::vector<float>& saida, const std::vect
 
 float entropiaCruzada(const std::vector<float>& y, const std::vector<float>& yChapeu) {
     float soma = 0.0f;
-    for(size_t i = 0; i < y.size(); i++) soma += y[i] * std::log(yChapeu[i] + 1e-12f);
+    for(size_t i = 0; i < y.size(); i++) soma += y[i] * log(yChapeu[i] + 1e-12f);
     return -soma;
 }
 
@@ -267,8 +268,8 @@ float huberPerda(const std::vector<float>& saida, const std::vector<float>& espe
     float soma = 0.0f;
     for(size_t i = 0; i < saida.size(); i++) {
         float diff = saida[i] - esperado[i];
-        if(std::abs(diff) <= delta) soma += 0.5f * diff * diff;
-        else soma += delta * (std::abs(diff) - 0.5f * delta);
+        if(abs(diff) <= delta) soma += 0.5f * diff * diff;
+        else soma += delta * (abs(diff) - 0.5f * delta);
     }
     return soma / saida.size();
 }
@@ -278,7 +279,7 @@ std::vector<float> derivadaHuber(const std::vector<float>& saida, const std::vec
     for(size_t i = 0; i < saida.size(); i++) {
         float diff = saida[i] - esperado[i];
         
-        if(std::abs(diff) <= delta) deriv[i] = diff;
+        if(abs(diff) <= delta) deriv[i] = diff;
         else deriv[i] = delta * (diff > 0 ? 1.0f : -1.0f);
     }
     return deriv;
@@ -288,18 +289,18 @@ float perdaTripleto(const std::vector<float>& ancora, const std::vector<float>& 
     float distPos = 0.0f;
     float distNeg = 0.0f;
     for(size_t i = 0; i < ancora.size(); i++) {
-        distPos += std::pow(ancora[i] - positiva[i], 2);
-        distNeg += std::pow(ancora[i] - negativa[i], 2);
+        distPos += pow(ancora[i] - positiva[i], 2);
+        distNeg += pow(ancora[i] - negativa[i], 2);
     }
     return std::max(0.0f, distPos - distNeg + margem);
 }
 
 float contrastivaPerda(const std::vector<float>& saida1, const std::vector<float>& saida2, int rotulo, float margem = 1.0f) {
     float distancia = 0.0f;
-    for(size_t i = 0; i < saida1.size(); i++) distancia += std::pow(saida1[i] - saida2[i], 2);
+    for(size_t i = 0; i < saida1.size(); i++) distancia += pow(saida1[i] - saida2[i], 2);
     
     if(rotulo == 1) return distancia;
-    else return std::max(0.0f, margem - std::sqrt(distancia));
+    else return std::max(0.0f, margem - sqrt(distancia));
 }
 
 // funções de saida:
@@ -311,7 +312,7 @@ std::vector<float> softmax(const std::vector<float>& arr, float temp = 1.0f) {
     std::vector<float> exps(arr.size());
     float soma = 0.0f;
     for(size_t i = 0; i < arr.size(); ++i) {
-        exps[i] = std::exp((arr[i] - max) / temp);
+        exps[i] = exp((arr[i] - max) / temp);
         soma += exps[i];
     }
     // evita divisão por zero

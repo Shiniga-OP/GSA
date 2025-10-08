@@ -8,7 +8,7 @@
 
 class TokenizadorBPE {
 public:
-    TokenizadorBPE(std::vector<std::pair<std::string,std::string>> merges) {
+    explicit TokenizadorBPE(std::vector<std::pair<std::string,std::string>> merges = std::vector<std::pair<std::string,std::string>>()) {
         // inicia merges
         for(size_t i = 0; i < merges.size(); ++i) {
             std::string chave = merges[i].first + " " + merges[i].second;
