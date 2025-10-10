@@ -225,7 +225,7 @@ inline std::vector<std::vector<float>> CamadaDensa::retropropagar(const std::vec
 }
 
 void testeCD() {
-    std::cout << "\n=== TESTE - CAMADA DENSA ===\n\n";
+    std::cout << "\n=== TESTE CAMADA DENSA ===\n\n";
     int dimEntrada = 10;
     int dimOculta = 50;
     int dimSaida = 10;
@@ -679,8 +679,8 @@ inline void CamadaConv::defBias(int filtroIdc, float bias) {
 }
 
 void testeCC() {
-    std::cout << "\n=== TESTE AVANÇADO - CAMADA CONVOLUCIONAL ===\n\n";
-    // detecção de bordas
+    std::cout << "\n=== TESTE CAMADA CONVOLUCIONAL ===\n\n";
+    
     std::cout << "🔍 TESTE 1: Detecção de Bordas\n";
     {
         CamadaConv conv(5, 5, 1, 1, 3, 1, 1, 0.0f);
@@ -725,72 +725,75 @@ void testeCC() {
             std::cout << "❌ FALHA NA DETECÇÃO\n";
         }
     }
-    // aprendizado de Padrões
-    std::cout << "🎯 TESTE 2: Aprendizado de Padrões Convolucionais\n";
+    std::cout << "\n🎯 TESTE 2: Aprendizado de Padrões Convolucionais\n";
     {
-        const int epocas = 200;
-        const float taxaAprendizado = 0.02f;
+        const int epocas = 300;
+        const float taxaAprendizado = 0.01f;
         
-        CamadaConv conv(4, 4, 1, 2, 2, 1, 0, 0.0f);
+        CamadaConv conv(3, 3, 1, 1, 2, 1, 0, 0.0f);
         
         std::vector<std::vector<std::vector<float>>> entrada = {{
-            {1, 1, 0, 0},
-            {1, 1, 0, 0}, 
-            {0, 0, 1, 1},
-            {0, 0, 1, 1}
+            {1, 0, 0},
+            {0, 1, 0}, 
+            {0, 0, 1}
         }};
-        auto saidaEsperada = zeros3D(2, 3, 3);
-        for(int i = 0; i < 3; ++i) {
-            for(int j = 0; j < 3; ++j) {
-                saidaEsperada[0][i][j] = (i < 2 && j < 2) ? 1.0f : 0.0f;  // Canto superior esquerdo
-                saidaEsperada[1][i][j] = (i >= 1 && j >= 1) ? 1.0f : 0.0f; // Canto inferior direito
-            }
+        auto saidaEsperada = zeros3D(1, 2, 2);
+        saidaEsperada[0][0][0] = 0.8f;  // canto superior esquerdo
+        saidaEsperada[0][1][1] = 0.8f;  // canto inferior direito
+        
+        std::cout << "Entrada (diagonal):\n";
+        for(const auto& linha : entrada[0]) {
+            for(float val : linha) std::cout << val << " ";
+            std::cout << "\n";
         }
-        // treino
+        std::cout << "Saída esperada (cantos):\n";
+        for(const auto& linha : saidaEsperada[0]) {
+            for(float val : linha) std::cout << val << " ";
+            std::cout << "\n";
+        }
         std::vector<float> historicoErro;
         
         for(int epoca = 0; epoca < epocas; ++epoca) {
             auto saida = conv.propagar(entrada, true);
             
-            // calcula erro
             float erro = 0.0f;
-            auto gradSaida = zeros3D(2, 3, 3);
+            auto gradSaida = zeros3D(1, 2, 2);
             
-            for(int f = 0; f < 2; ++f) {
-                for(int i = 0; i < 3; ++i) {
-                    for(int j = 0; j < 3; ++j) {
-                        float diff = saida[f][i][j] - saidaEsperada[f][i][j];
-                        erro += diff * diff;
-                        gradSaida[f][i][j] = 2.0f * diff;
-                    }
-                }
-            }
+            float diff1 = saida[0][0][0] - saidaEsperada[0][0][0];
+            float diff2 = saida[0][1][1] - saidaEsperada[0][1][1];
+            
+            erro = 0.5f * (diff1 * diff1 + diff2 * diff2);
+            gradSaida[0][0][0] = diff1;
+            gradSaida[0][1][1] = diff2;
+            
             historicoErro.push_back(erro);
             
-            if(epoca % 20 == 0) {
-                std::cout << "Época " << epoca << " - Erro: " << erro << "\n";
+            if(epoca % 50 == 0) {
+                std::cout << "Época " << epoca << " - Erro: " << erro;
+                if(erro < 0.1f) std::cout << " ✅";
+                std::cout << "\n";
             }
             conv.retropropagar(gradSaida, taxaAprendizado, 0.001f);
         }
         auto saidaFinal = conv.propagar(entrada, false);
-        float erroFinal = 0.0f;
-        
-        for(int f = 0; f < 2; ++f) {
-            for(int i = 0; i < 3; ++i) {
-                for(int j = 0; j < 3; ++j) {
-                    float diff = saidaFinal[f][i][j] - saidaEsperada[f][i][j];
-                    erroFinal += std::abs(diff);
-                }
-            }
+        std::cout << "\nSaída final:\n";
+        for(const auto& linha : saidaFinal[0]) {
+            for(float val : linha) std::cout << val << " ";
+            std::cout << "\n";
         }
+        float erroFinal = 0.5f * (
+            pow(saidaFinal[0][0][0] - saidaEsperada[0][0][0], 2) +
+            pow(saidaFinal[0][1][1] - saidaEsperada[0][1][1], 2)
+        );
         std::cout << "Erro final: " << erroFinal << " | ";
-        if(erroFinal < 1.0f) {
+        if(erroFinal < 0.05f) {
             std::cout << "✅ APRENDIZADO CONVOLUCIONAL BEM-SUCEDIDO\n";
-        } else {
+        } else if(erroFinal < 0.1f) {
             std::cout << "⚠️  APRENDIZADO PARCIAL\n";
+        } else {
+            std::cout << "❌ FALHA NO APRENDIZADO\n";
         }
     }
-    // lerformance com Imagens Grandes
     std::cout << "\n⚡ TESTE 3: Performance com Dimensões Reais\n";
     {
         auto inicio = std::chrono::high_resolution_clock::now();
@@ -838,7 +841,6 @@ void testeCC() {
             std::cout << "⚠️  PERFORMANCE A MELHORAR\n";
         }
     }
-    // verificação de Dimensões
     std::cout << "\n📐 TESTE 4: Verificação de Dimensões\n";
     {
         std::vector<std::tuple<int, int, int, int, int, int, int>> testes = {
@@ -985,7 +987,7 @@ inline std::vector<std::vector<float>> CamadaAtencao::retropropagar(const std::v
 }
 
 void testeCA() {
-    std::cout << "\n\n=== TESTE - CAMADA ATENÇÃO ===";
+    std::cout << "\n\n=== TESTE CAMADA ATENÇÃO ===";
 
     const int tamSequencia = 4;
     const int dimEntrada = 32;

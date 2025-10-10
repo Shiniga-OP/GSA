@@ -8,7 +8,7 @@ Softmax Lote:
 0.0900306 0.244728 0.665241
 0.0900306 0.665241 0.244728
 Argmax: 2
-Add Ruido: 0.99992 1.99561 2.99289
+Add Ruido: 1.00423 2.00873 3.0047
 
 === TESTES ERRO ===
 
@@ -27,7 +27,7 @@ contrastivaPerda (rotulo=0): 0.858579
 
 L1 Regularization: [0.1 -0.1 0 0.1 -0.1 0.1 ]
 L2 Regularization: [0.1 -0.2 0 0.3 -0.4 0.5 ]
-Dropout: [1.42857 2.85714 4.28571 0 ]
+Dropout: [0 2.85714 4.28571 5.71429 ]
 Normalização Entrada: [0 0.25 0.5 0.75 1 ]
 Normalização Z: [-1.41421 -0.707107 0 0.707107 1.41421 ]
 Acurácia: 1
@@ -40,17 +40,17 @@ ROC AUC: 0.75
 
 === TESTES PESOS ===
 
-Xavier: 0.122022 0.50113 0.374269 -0.0639201 -0.0777996 -0.224709
+Xavier: 0.564176 0.0739713 0.846975 0.48708 0.737873 0.581163
 attPesos: 0.998 1.996 2.994 3.992
 
 === TESTES MATRIZES ===
 
 Tensor 3D:
-0.0754597 0.0361966
--0.0545886 -0.0985919
+-0.0825808 0.0762964
+-0.0899974 -0.0864711
 
--0.0149719 0.0966729
--0.0155317 -0.0156174
+-0.00183161 0.0886747
+-0.0760166 0.0485616
 
 Zeros 3D:
 0 0
@@ -60,64 +60,64 @@ Zeros 3D:
 0 0
 
 Mapear 3D (x2):
-0.150919 0.0723933
--0.109177 -0.197184
+-0.165162 0.152593
+-0.179995 -0.172942
 
--0.0299437 0.193346
--0.0310635 -0.0312348
+-0.00366322 0.177349
+-0.152033 0.0971232
 
 Soma 3D:
-0.0754597 0.0361966
--0.0545886 -0.0985919
+-0.0825808 0.0762964
+-0.0899974 -0.0864711
 
--0.0149719 0.0966729
--0.0155317 -0.0156174
+-0.00183161 0.0886747
+-0.0760166 0.0485616
 
 Matriz 2x3:
-0.00443124 -0.025497 -0.0130253
-0.0542079 0.00610304 -0.0789471
+-0.00550722 -0.0992788 -0.061972
+-0.0268154 0.0139274 0.0219617
 Produto Externo:
 3 4
 6 8
 Soma Matriz:
--0.0256028 -0.0433502 0.00358506
--0.000244819 -0.0536633 -0.0111435
+-0.0538658 -0.109348 0.0254592
+-0.0987477 -0.0384796 0.0866003
 Multiplicação Matrizes:
--0.00106142 0.00180322
-0.00531006 0.0092626
+0.0103518 -0.0112889
+-0.0029175 0.00202268
 
-=== TESTE - CAMADA DENSA ===
+=== TESTE CAMADA DENSA ===
 
 Treinando função identidade...
 Época   Erro Médio
 ------  ----------
-0       0.475437
-50      0.00170279
-100     0.000404913
-150     0.000317491
-200     0.000264992
-250     0.000227257
+0       0.472838
+50      0.00168246
+100     0.000306013
+150     0.000247109
+200     0.000211617
+250     0.000186233
 
 --- RESULTADOS ---
-Erro final: 0.0111951
-Tempo: 1146 ms
-Redução: 99.958%
+Erro final: 0.0102638
+Tempo: 1196 ms
+Redução: 99.9645%
 🎉 EXCELENTE: Aprendizado quase perfeito!
 
 📊 Comparação (primeira amostra):
-Entrada[0]:  -0.850 → Saída:  -0.861 (Esperado:  -0.850) ✓
-Entrada[1]:   0.223 → Saída:   0.212 (Esperado:   0.223) ✓
-Entrada[2]:  -0.444 → Saída:  -0.432 (Esperado:  -0.444) ✓
+Entrada[0]:  -0.556 → Saída:  -0.552 (Esperado:  -0.556) ✓
+Entrada[1]:  -0.378 → Saída:  -0.379 (Esperado:  -0.378) ✓
+Entrada[2]:   0.223 → Saída:   0.210 (Esperado:   0.223) ✓
 
 === TESTE DE DESEMPENHO ===
 
 Config: Lote=16, Entrada=64, Oculto=128
-Tempo total: 309 ms
-Tempo/iteração: 30 ms
-Performance: 16.9672 MFLOPS
-Velocidade atual: ~25.89x
+Tempo total: 310 ms
+Tempo/iteração: 31 ms
+Performance: 16.9125 MFLOPS
+Velocidade atual: ~25.8065x
 
-=== TESTE AVANÇADO - CAMADA CONVOLUCIONAL ===
+=== TESTE CAMADA CONVOLUCIONAL ===
 
 🔍 TESTE 1: Detecção de Bordas
 Entrada (borda horizontal):
@@ -133,23 +133,31 @@ Saída (detecção de bordas):
 0 0 0 0 0
 0 0 0 0 0
 ✅ DETECÇÃO DE BORDAS FUNCIONANDO
+
 🎯 TESTE 2: Aprendizado de Padrões Convolucionais
-Época 0 - Erro: 15.292
-Época 20 - Erro: 6.3131
-Época 40 - Erro: 5.48642
-Época 60 - Erro: 5.02473
-Época 80 - Erro: 4.71408
-Época 100 - Erro: 4.57935
-Época 120 - Erro: 4.53166
-Época 140 - Erro: 4.51402
-Época 160 - Erro: 4.50647
-Época 180 - Erro: 4.50293
-Erro final: 5.07209 | ⚠️  APRENDIZADO PARCIAL
+Entrada (diagonal):
+1 0 0
+0 1 0
+0 0 1
+Saída esperada (cantos):
+0.8 0
+0 0.8
+Época 0 - Erro: 0.209234
+Época 50 - Erro: 0.000474964 ✅
+Época 100 - Erro: 5.42087e-06 ✅
+Época 150 - Erro: 4.996e-10 ✅
+Época 200 - Erro: 2.10648e-08 ✅
+Época 250 - Erro: 1.75408e-08 ✅
+
+Saída final:
+0.799867 0.252652
+0.252652 0.799867
+Erro final: 1.77466e-08 | ✅ APRENDIZADO CONVOLUCIONAL BEM-SUCEDIDO
 
 ⚡ TESTE 3: Performance com Dimensões Reais
 Processamento de 8 imagens 32x32x3 → 16 filtros
-Tempo total: 509ms
-Performance: 13.9055 MFLOPS
+Tempo total: 532ms
+Performance: 13.3043 MFLOPS
 ✅ PERFORMANCE ADEQUADA
 
 📐 TESTE 4: Verificação de Dimensões
@@ -158,23 +166,23 @@ Entrada 32x32x3 → Saída 32x32x16 - ✅
 Entrada 64x64x3 → Saída 30x30x32 - ✅
 
 
-=== TESTE - CAMADA ATENÇÃO ===
+=== TESTE CAMADA ATENÇÃO ===
 --- 📐 Verificação de Dimensões ---
 Status: ✅ SUCESSO
 
 --- 🎯 Treino com Dados Consistentes ---
 Objetivo: 1º elemento → 3º elemento (dados FIXOS para aprendizado)
 
-Época [100] - Erro: 0.0140 ✅
-Época [200] - Erro: 0.0004 ✅
+Época [100] - Erro: 0.0168 ✅
+Época [200] - Erro: 0.0003 ✅
 Época [300] - Erro: 0.0002 ✅
 Época [400] - Erro: 0.0002 ✅
 Época [500] - Erro: 0.0002 ✅
-Época [600] - Erro: 0.0004 ✅
+Época [600] - Erro: 0.0002 ✅
 Época [700] - Erro: 0.0002 ✅
-Época [800] - Erro: 0.0003 ✅
-Época [900] - Erro: 0.0005 ✅
-Época [1000] - Erro: 0.0010 ✅
+Época [800] - Erro: 0.0002 ✅
+Época [900] - Erro: 0.0002 ✅
+Época [1000] - Erro: 0.0002 ✅
 
 --- 📊 Resultados Finais ---
 Melhor erro alcançado: 0.0001
@@ -182,10 +190,10 @@ Status: ✅ APRENDIZADO BEM-SUCEDIDO
 
 --- 🔍 Análise dos Pesos de Atenção ---
 Distribuição de atenção do 1º elemento:
-  Elemento 1: 0.069 (6.9%)
-  Elemento 2: 0.061 (6.1%)
-  Elemento 3: 0.790 (79.0%) ← ALVO
-  Elemento 4: 0.080 (8.0%)
+  Elemento 1: 0.197 (19.7%)
+  Elemento 2: 0.325 (32.5%)
+  Elemento 3: 0.440 (44.0%) ← ALVO
+  Elemento 4: 0.038 (3.8%)
 
 🎯 Foco principal: Elemento 3 - ✅ CORRETO!
 
@@ -198,8 +206,40 @@ Vocabulário construído: 21 tokens
 Texto: olá mundo
 Codificado: 3 14 4 10 20 5 6 7 12 3
 Decodificado: olá mundo
+=== GERADOR DE SEQUENCIAS ===
 
-real    0m5.085s
-user    0m5.024s
-sys     0m0.058s
+Iniciando gerador...
+Configuração:
+   Dimensão do Modelo: 16
+   Camadas: 2
+   Contexto: 4 tokens
+   Tamanho do Vocabulario: 15
+Treinando com 3 padrões...
+
+TREINANDO...
+Época 0 - Perda: 2.8
+Época 10 - Perda: 1.4
+Época 20 - Perda: 1.2
+Época 30 - Perda: 0.9
+Época 40 - Perda: 1.0
+Época 50 - Perda: 0.9
+Época 60 - Perda: 0.8
+Época 70 - Perda: 0.8
+Época 80 - Perda: 0.8
+Época 90 - Perda: 0.6
+
+=== TESTES DE GERAÇÃO ===
+1. [1 2] esperado 3
+GERANDO: [1 2] → 3 ✅ CORRETO
+
+2. [4 5] esperado 6
+GERANDO: [4 5] → 6 ✅ CORRETO
+
+3. [7 8] esperado 9
+GERANDO: [7 8] → 9 ✅ CORRETO
+
+
+real    0m11.899s
+user    0m11.688s
+sys     0m0.195s
 ~ $

@@ -1,3 +1,4 @@
+#pragma once
 #include "biblis/camadas.h"
 #include "biblis/toke.h"
 #include <algorithm>
@@ -26,6 +27,11 @@ public:
         std::cout << "   Contexto: " << tamCtx << " tokens\n";
         std::cout << "   Tamanho do Vocabulario: " << vocabTam << "\n";
     }
+    int vocabTam_, dimModelo_, numCamadas_, tamCtx_;
+    std::unique_ptr<CamadaDensa> embedding_;
+    std::vector<std::unique_ptr<CamadaDensa>> camadasDensas_;
+    std::vector<std::unique_ptr<CamadaAtencao>> camadasAtencao_;
+    std::unique_ptr<CamadaDensa> saida_;
     
     std::vector<std::vector<float>> propagar(const std::vector<int>& tokens, bool treino = true) {
         if(tokens.empty()) return {};
@@ -99,13 +105,6 @@ public:
             }
         }
     }
-
-private:
-    int vocabTam_, dimModelo_, numCamadas_, tamCtx_;
-    std::unique_ptr<CamadaDensa> embedding_;
-    std::vector<std::unique_ptr<CamadaDensa>> camadasDensas_;
-    std::vector<std::unique_ptr<CamadaAtencao>> camadasAtencao_;
-    std::unique_ptr<CamadaDensa> saida_;
     
     std::vector<std::vector<float>> tokensPraOneHot(const std::vector<int>& tokens) {
         std::vector<std::vector<float>> oneHot(tokens.size(), std::vector<float>(vocabTam_, 0.0f));
@@ -161,7 +160,7 @@ private:
     }
 };
 
-int main() {
+void testeGS() {
     std::cout << "=== GERADOR DE SEQUENCIAS ===\n";
     const int vocabTam = 15;
     const int dimModelo = 16;
@@ -201,8 +200,7 @@ int main() {
         std::cout << "\n";
     } catch(const std::exception& e) {
         std::cout << "❌ ERRO: " << e.what() << "\n";
-        return 1;
+        return;
     }
-    return 0;
 }
 
