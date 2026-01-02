@@ -1,3 +1,4 @@
+// biblis/ativas.h
 #pragma once
 #include <math.h>
 
@@ -19,6 +20,9 @@ float derivadaHardSigmoid(float y) {
     return (y > -2.5 && y < 2.5) ? 0.2 : 0;
 }
 
+float tanhF(float x) {
+    return (float)tanh(x);
+}
 float derivadaTanh(float y) {
     return 1 - y * y;
 }

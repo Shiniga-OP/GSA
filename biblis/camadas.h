@@ -1,1083 +1,301 @@
+// biblis/camadaa.h
 #pragma once
-#include <iostream>
 #include <vector>
-#include <stdexcept>
-#include <random>
-#include <cmath>
-#include <chrono>
+#include <memory>
+#include <string>
 #include <functional>
-#include <algorithm>
-#include <numeric>
-#include <iomanip>
-
-#include "util.h"
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
 #include "ativas.h"
+#include "util.h"
+#include "otimizadores.h"
 
-// DENSA:
-class CamadaDensa {
+using namespace std;
+
+class Camada {
 public:
-    CamadaDensa(int dimEntrada, int dimSaida, float taxaDropout = 0.0f);
-    std::vector<std::vector<float>> propagar(const std::vector<std::vector<float>>& x, bool treino = true);
-    std::vector<std::vector<float>> retropropagar(const std::vector<std::vector<float>>& dY, float taxa, float lambda = 0.001f);
-    std::vector<std::vector<float>> p1, p2;
-    std::vector<float> b1, b2;
-
-    std::vector<std::vector<float>> m1, v1, m2, v2;
-    std::vector<float> mB1, vB1, mB2, vB2;
-
-    int iteracao;
-    float taxaDrop;
-    int dimEntrada_, dimSaida_;
-    float ultimoErro;
-
-    std::vector<std::vector<float>> cache_x;
-    std::vector<std::vector<float>> cache_z1;
-    std::vector<std::vector<float>> cache_ativ1;
-    std::vector<std::vector<bool>> cache_mascara_dropout;
+    string tipo;
+    string nome;
+    unique_ptr<Otimizador> otimizador;
+    
+    Camada(const string& nome = "") : nome(nome) {}
+    virtual ~Camada() = default;
+    
+    virtual vector<float> prop(const vector<float>& entrada) = 0;
+    virtual vector<vector<float>> propLote(const vector<vector<float>>& entrada) {
+        // processa cada exemplo sozinho
+        vector<vector<float>> saida;
+        for(const auto& e : entrada) {
+            saida.push_back(prop(e));
+        }
+        return saida;
+    }
+    
+    virtual vector<float> retroprop(const vector<float>& gradiente) = 0;
+    virtual void att(float taxaAprendizado) = 0;
+    virtual void zerarGradientes() = 0;
+    
+    // otimizadores:
+    virtual void defOtimizador(unique_ptr<Otimizador> otim) {
+        otimizador = std::move(otim);
+    }
+    
+    // pra camadas treinaveis
+    virtual bool temParametros() const { return false; }
+    virtual size_t numParametros() const { return 0; }
+    
+    // serialização
+    virtual void salvar(const string& arquivo) const = 0;
+    virtual void carregar(const string& arquivo) = 0;
 };
 
-inline CamadaDensa::CamadaDensa(int dimEntrada, int dimSaida, float taxaDropout) 
-    : dimEntrada_(dimEntrada), dimSaida_(dimSaida), taxaDrop(taxaDropout), iteracao(1), ultimoErro(0.0f) {
-    
-    this->p1 = iniPesosXavier(dimSaida, dimEntrada);
-    this->b1 = zeros(dimSaida);
-    this->p2 = iniPesosXavier(dimEntrada, dimSaida);
-    this->b2 = zeros(dimEntrada);
-
-    this->m1 = matrizZeros(dimSaida, dimEntrada);
-    this->v1 = matrizZeros(dimSaida, dimEntrada);
-    this->m2 = matrizZeros(dimEntrada, dimSaida);
-    this->v2 = matrizZeros(dimEntrada, dimSaida);
-    
-    this->mB1 = zeros(dimSaida);
-    this->vB1 = zeros(dimSaida);
-    this->mB2 = zeros(dimEntrada);
-    this->vB2 = zeros(dimEntrada);
-}
-
-inline std::vector<std::vector<float>> CamadaDensa::propagar(const std::vector<std::vector<float>>& x, bool treino) {
-    int lote = x.size();
-    
-    auto z1 = matrizZeros(lote, dimSaida_);
-    auto ativ1 = matrizZeros(lote, dimSaida_);
-    auto saida = matrizZeros(lote, dimEntrada_);
-
-    this->cache_x = x;
-    // camada 1
-    // acesso sequencial
-    for(int i = 0; i < lote; ++i) {
-        const auto& x_i = x[i];
-        auto& z1_i = z1[i];
-        
-        for (int j = 0; j < dimSaida_; ++j) {
-            float soma = b1[j];
-            const auto& p1_j = p1[j];
-            for (int k = 0; k < dimEntrada_; ++k) {
-                soma += x_i[k] * p1_j[k];
-            }
-            z1_i[j] = soma;
-        }
-    }
-    this->cache_z1 = z1;
-
-    for(int i = 0; i < lote; ++i) {
-        for(int j = 0; j < dimSaida_; ++j) {
-            ativ1[i][j] = std::tanh(z1[i][j]);
-        }
-    }
-    this->cache_ativ1 = ativ1;
-
-    auto ativ1_dropout = ativ1;
-    this->cache_mascara_dropout.clear();
-    
-    if(treino && taxaDrop > 0.0f) {
-        this->cache_mascara_dropout.resize(lote, std::vector<bool>(dimSaida_, false));
-        float escala = 1.0f / (1.0f - taxaDrop);
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-        
-        for(int i = 0; i < lote; ++i) {
-            for(int j = 0; j < dimSaida_; ++j) {
-                if(dist(gen) < taxaDrop) {
-                    ativ1_dropout[i][j] = 0.0f;
-                    cache_mascara_dropout[i][j] = false;
-                } else {
-                    ativ1_dropout[i][j] *= escala;
-                    cache_mascara_dropout[i][j] = true;
-                }
-            }
-        }
-    }
-
-    // camada 2
-    for(int i = 0; i < lote; ++i) {
-        const auto& ativ_i = ativ1_dropout[i];
-        auto& saida_i = saida[i];
-        
-        for(int j = 0; j < dimEntrada_; ++j) {
-            float soma = b2[j];
-            const auto& p2_j = p2[j];
-            for(int k = 0; k < dimSaida_; ++k) {
-                soma += ativ_i[k] * p2_j[k];
-            }
-            saida_i[j] = soma;
-        }
-    }
-    return saida;
-}
-
-inline std::vector<std::vector<float>> CamadaDensa::retropropagar(const std::vector<std::vector<float>>& dY, float taxa, float lambda) {
-    int lote = dY.size();
-    
-    auto dP2 = matrizZeros(dimEntrada_, dimSaida_);
-    auto dB2 = zeros(dimEntrada_);
-    auto dP1 = matrizZeros(dimSaida_, dimEntrada_);
-    auto dB1 = zeros(dimSaida_);
-    auto dO = matrizZeros(lote, dimSaida_);
-    auto dX = matrizZeros(lote, dimEntrada_);
-
-    // gradiente da camada 2
-    for(int i = 0; i < lote; ++i) {
-        const auto& dY_i = dY[i];
-        for(int j = 0; j < dimEntrada_; ++j) {
-            dB2[j] += dY_i[j];
-            
-            const auto& ativ1_i = cache_ativ1[i];
-            for(int k = 0; k < dimSaida_; ++k) {
-                bool manter = cache_mascara_dropout.empty() || cache_mascara_dropout[i][k];
-                if(manter) {
-                    float escala = cache_mascara_dropout.empty() ? 1.0f : (1.0f / (1.0f - taxaDrop));
-                    dP2[j][k] += dY_i[j] * ativ1_i[k] * escala;
-                }
-            }
-        }
-    }
-    // camada 2
-    for(int i = 0; i < lote; ++i) {
-        const auto& dY_i = dY[i];
-        auto& dO_i = dO[i];
-        
-        for(int j = 0; j < dimSaida_; ++j) {
-            float soma = 0.0f;
-            for(int k = 0; k < dimEntrada_; ++k) {
-                soma += dY_i[k] * p2[k][j];
-            }
-            dO_i[j] = soma;
-        }
-    }
-    // dropout e derivada da Tanh
-    for(int i = 0; i < lote; ++i) {
-        auto& dO_i = dO[i];
-        const auto& z1_i = cache_z1[i];
-        
-        for(int j = 0; j < dimSaida_; ++j) {
-            bool manter = cache_mascara_dropout.empty() || cache_mascara_dropout[i][j];
-            if(!manter) {
-                dO_i[j] = 0.0f;
-            } else {
-                // derivada da tanh: 1 - tanh^2(x)
-                float tanh_x = std::tanh(z1_i[j]);
-                dO_i[j] *= (1.0f - tanh_x * tanh_x);
-            }
-        }
-    }
-    // gradiente da camada 1
-    for(int i = 0; i < lote; ++i) {
-        const auto& dO_i = dO[i];
-        const auto& x_i = cache_x[i];
-        
-        for(int j = 0; j < dimSaida_; ++j) {
-            dB1[j] += dO_i[j];
-            
-            for(int k = 0; k < dimEntrada_; ++k) {
-                dP1[j][k] += dO_i[j] * x_i[k];
-            }
-        }
-    }
-
-    // gradiente pra entrada anterior
-    for(int i = 0; i < lote; ++i) {
-        const auto& dO_i = dO[i];
-        auto& dX_i = dX[i];
-        
-        for(int j = 0; j < dimEntrada_; ++j) {
-            float soma = 0.0f;
-            for(int k = 0; k < dimSaida_; ++k) {
-                soma += dO_i[k] * p1[k][j];
-            }
-            dX_i[j] = soma;
-        }
-    }
-    // normalização
-    float invLote = 1.0f / lote;
-    for(auto& linha : dP1) for (auto& val : linha) val *= invLote;
-    for(auto& linha : dP2) for (auto& val : linha) val *= invLote;
-    for(auto& val : dB1) val *= invLote;
-    for(auto& val : dB2) val *= invLote;
-    // ATUALIZAÇÃO DOS PESOS
-    this->p1 = attPesosAdam(this->p1, dP1, this->m1, this->v1, taxa, 0.9f, 0.999f, 1e-8f, this->iteracao, lambda);
-    this->p2 = attPesosAdam(this->p2, dP2, this->m2, this->v2, taxa, 0.9f, 0.999f, 1e-8f, this->iteracao, lambda);
-    this->b1 = attPesosAdam1D(this->b1, dB1, this->mB1, this->vB1, taxa, 0.9f, 0.999f, 1e-8f, this->iteracao, lambda);
-    this->b2 = attPesosAdam1D(this->b2, dB2, this->mB2, this->vB2, taxa, 0.9f, 0.999f, 1e-8f, this->iteracao, lambda);
-    this->iteracao++;
-    return dX;
-}
-
-void testeCD() {
-    std::cout << "\n=== TESTE CAMADA DENSA ===\n\n";
-    int dimEntrada = 10;
-    int dimOculta = 50;
-    int dimSaida = 10;
-    int tamanhoLote = 32;
-    int epocas = 300;
-    // sem dropout pra tarefa de identidade
-    CamadaDensa camada(dimEntrada, dimOculta, 0.0f);
-    
-    auto entrada = std::vector<std::vector<float>>(tamanhoLote);
-    auto saidaEsperada = std::vector<std::vector<float>>(tamanhoLote);
-    
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
-    
-    for(int i = 0; i < tamanhoLote; ++i) {
-        entrada[i] = std::vector<float>(dimEntrada);
-        for(int j = 0; j < dimEntrada; ++j) {
-            entrada[i][j] = dist(gen);
-        }
-        saidaEsperada[i] = entrada[i];
-    }
-    // taxa de aprendizado adaptativa
-    float taxaBase = 0.005f;
-    std::vector<float> historicoErro;
-    
-    std::cout << "Treinando função identidade...\n";
-    std::cout << "Época\tErro Médio\n";
-    std::cout << "------\t----------\n";
-    
-    auto inicio = std::chrono::high_resolution_clock::now();
-    
-    for(int epoca = 0; epoca < epocas; ++epoca) {
-        // decaimento
-        float taxaAtual = taxaBase * (1.0f / (1.0f + 0.01f * epoca));
-        
-        auto saida = camada.propagar(entrada, true);
-        // erro quadrático médio
-        float erroTotal = 0.0f;
-        for(int i = 0; i < tamanhoLote; ++i) {
-            for(int j = 0; j < dimSaida; ++j) {
-                float diff = saida[i][j] - saidaEsperada[i][j];
-                erroTotal += diff * diff;
-            }
-        }
-        float erroMedio = erroTotal / (tamanhoLote * dimSaida);
-        historicoErro.push_back(erroMedio);
-        
-        if(epoca % 50 == 0) {
-            std::cout << epoca << "\t" << erroMedio << "\n";
-        }
-        // gradiente do MSE
-        auto gradSaida = saida;
-        for(int i = 0; i < tamanhoLote; ++i) {
-            for(int j = 0; j < dimSaida; ++j) {
-                gradSaida[i][j] = 2.0f * (saida[i][j] - saidaEsperada[i][j]) / tamanhoLote;
-            }
-        }
-        camada.retropropagar(gradSaida, taxaAtual, 0.0001f);
-    }
-    auto fim = std::chrono::high_resolution_clock::now();
-    auto duracao = std::chrono::duration_cast<std::chrono::milliseconds>(fim - inicio);
-    // avaliação
-    auto saidaFinal = camada.propagar(entrada, false);
-    float erroFinal = 0.0f;
-    for(int i = 0; i < tamanhoLote; ++i) {
-        for(int j = 0; j < dimSaida; ++j) {
-            float diff = saidaFinal[i][j] - saidaEsperada[i][j];
-            erroFinal += std::abs(diff);
-        }
-    }
-    erroFinal /= (tamanhoLote * dimSaida);
-    
-    std::cout << "\n--- RESULTADOS ---\n";
-    std::cout << "Erro final: " << erroFinal << "\n";
-    std::cout << "Tempo: " << duracao.count() << " ms\n";
-    std::cout << "Redução: " << ((historicoErro[0] - historicoErro.back()) / historicoErro[0] * 100) << "%\n";
-    
-    if(erroFinal < 0.02f) {
-        std::cout << "🎉 EXCELENTE: Aprendizado quase perfeito!\n";
-    } else if(erroFinal < 0.05f) {
-        std::cout << "✅ MUITO BOM: Aprendizado sólido!\n";
-    } else if(erroFinal < 0.1f) {
-        std::cout << "👍 BOM: Aprendizado funcional\n";
-    } else if(erroFinal < 0.2f) {
-        std::cout << "⚠️  RAZOÁVEL: Aprendizado parcial\n";
-    } else {
-        std::cout << "❌ INSUFICIENTE\n";
-    }
-    
-    std::cout << "\n📊 Comparação (primeira amostra):\n";
-    int exemplos = 3;
-    for(int i = 0; i < exemplos && i < dimEntrada; ++i) {
-        printf("Entrada[%d]: %7.3f → Saída: %7.3f (Esperado: %7.3f) %s\n", 
-               i, entrada[0][i], saidaFinal[0][i], saidaEsperada[0][i],
-               std::abs(saidaFinal[0][i] - saidaEsperada[0][i]) < 0.1f ? "✓" : "✗");
-    }
-    std::cout << "\n=== TESTE DE DESEMPENHO ===\n\n";
-    const int lote = 16;
-    dimEntrada = 64;
-    dimOculta = 128;
-    const int iteracoes = 10;
-
-    camada = CamadaDensa(dimEntrada, dimOculta, 0.1f);
-    
-    auto x = std::vector<std::vector<float>>(lote);
-    for(int i = 0; i < lote; ++i) {
-        x[i] = vetor(dimEntrada, 1.0f);
-    }
-    inicio = std::chrono::high_resolution_clock::now();
-
-    for(int i = 0; i < iteracoes; ++i) {
-        auto saida = camada.propagar(x, true);
-        auto grad = saida;
-        for(auto& linha : grad) for(auto& val : linha) val = (val - 1.0f) / lote;
-        auto dX = camada.retropropagar(grad, 1e-4f);
-    }
-    fim = std::chrono::high_resolution_clock::now();
-    duracao = std::chrono::duration_cast<std::chrono::milliseconds>(fim - inicio);
-
-    std::cout << "Config: Lote=" << lote << ", Entrada=" << dimEntrada << ", Oculto=" << dimOculta << "\n";
-    std::cout << "Tempo total: " << duracao.count() << " ms\n";
-    std::cout << "Tempo/iteração: " << duracao.count() / iteracoes << " ms\n";
-    
-    double operacoes = (double)iteracoes * (double)lote * ((double)dimEntrada * dimOculta * 2 + (double)dimOculta * dimEntrada * 2);
-    double segundos = duracao.count() / 1000.0;
-    std::cout << "Performance: " << operacoes / segundos / 1e6 << " MFLOPS\n";
-    
-    double tempo_por_iteracao = (double)duracao.count() / iteracoes;
-    if(tempo_por_iteracao > 0) {
-        std::cout << "Velocidade atual: ~" << 800.0 / tempo_por_iteracao << "x\n";
-    }
-}
-// CONVOLUÇÃO:
-class CamadaConv {
+class Densa : public Camada {
 public:
-    CamadaConv(int entradaAltura, int entradaLargura, int entradaCanais, int numFiltros, int filtroTamanho, int passo = 1, int prenchimento = 0, float taxaDropout = 0.0f);
+    size_t entradaDim;
+    size_t saidaDim;
+    vector<vector<float>> pesos; // [saida x entrada]
+    vector<float> bias; // [saida]
+    vector<vector<float>> gradPesos; // gradientes dos pesos
+    vector<float> gradBias; // gradientes do bias
     
-    std::vector<std::vector<std::vector<float>>> propagar(
-        const std::vector<std::vector<std::vector<float>>>& entrada, 
-        bool treino = true);
+    function<float(float)> ativacao;
+    function<float(float)> derivadaAtivacao;
     
-    std::vector<std::vector<std::vector<float>>> retropropagar(
-        const std::vector<std::vector<std::vector<float>>>& gradSaida,
-        float taxaAprendizado, float lambda = 0.001f);
+    // cache pra prop/retroprop
+    vector<float> entradaCache;
+    vector<float> ativacaoCache;
     
-    void imprimirInfo() const;
-    void defFiltro(int filtroIdc, int canalIdc, const std::vector<std::vector<float>>& filtro);
-    void defBias(int filtroIdc, float bias);
-    int entradaAltura_, entradaLargura_, entradaCanais_;
-    int numFiltros_, filtroTam_, passo_, prenchimento_;
-    float taxaDropout_;
+    bool usarBias;
+    string tipoAtivacao;
     
-    std::vector<std::vector<std::vector<std::vector<float>>>> filtros_; // [filtro][canal][altura][largura]
-    std::vector<float> biases_;
+    // construtores
+    Densa(size_t entradaDim, size_t saidaDim, 
+          const string& tipoAtivacao = "linear",
+          bool usarBias = true,
+          const string& nome = "")
+        : Camada(nome), entradaDim(entradaDim), saidaDim(saidaDim), 
+          usarBias(usarBias), tipoAtivacao(tipoAtivacao) {
+        
+        // inicia os pesos(He/Xavier baseado na ativação)
+        if(tipoAtivacao == "relu" || tipoAtivacao == "leakyrelu") {
+            pesos = iniPesosHe(saidaDim, entradaDim);
+        } else {
+            pesos = iniPesosXavier(saidaDim, entradaDim);
+        }
+        bias = zeros(saidaDim);
+        
+        // inicia os gradientes
+        gradPesos = vector<vector<float>>(saidaDim, vector<float>(entradaDim, 0.0f));
+        gradBias = zeros(saidaDim);
+        
+        // config função de ativação
+        configAtivacao(tipoAtivacao);
+        tipo = "Densa";
+    }
     
-    // cache pra retropropagação
-    std::vector<std::vector<std::vector<float>>> cacheEntrada_;
-    std::vector<std::vector<std::vector<float>>> cacheSaida_;
-    std::vector<std::vector<std::vector<bool>>> cacheMascaraDropout_;
+    void configAtivacao(const string& tipo) {
+        tipoAtivacao = tipo;
+        
+        if(tipo == "sigmoid") {
+            ativacao = sigmoid;
+            derivadaAtivacao = [](float y) { return y * (1 - y); };
+        } else if(tipo == "relu") {
+            ativacao = ReLU;
+            derivadaAtivacao = [](float y) { return y > 0 ? 1.0f : 0.0f; };
+        } else if(tipo == "leakyrelu") {
+            ativacao = leakyReLU;
+            derivadaAtivacao = derivadaLeakyReLU;
+        } else if(tipo == "tanh") {
+            ativacao = tanhF;
+            derivadaAtivacao = derivadaTanh;
+        } else if(tipo == "softmax") {
+            // softmax é especial é tratado separadamente
+            ativacao = nullptr;
+            derivadaAtivacao = nullptr;
+        } else { // linear(sem ativação)
+            ativacao = [](float x) { return x; };
+            derivadaAtivacao = [](float y) { return 1.0f; };
+        }
+    }
     
-    std::vector<std::vector<std::vector<std::vector<float>>>> mFiltros_, vFiltros_;
-    std::vector<float> mBiases_, vBiases_;
-    int iteracao_;
+    vector<float> prop(const vector<float>& entrada) override {
+        if(entrada.size() != entradaDim) {
+            throw invalid_argument("Dimensão de entrada incorreta para camada densa");
+        }
+        // cache da entrada
+        entradaCache = entrada;
+        
+        // calcular z = Px + b
+        vector<float> z = aplicarMatriz(pesos, entrada);
+        
+        if(usarBias) {
+            z = somarVetores(z, bias);
+        }
+        // aplica ativação
+        vector<float> saida(z.size());
+        if(tipoAtivacao == "softmax") {
+            saida = softmax(z);
+        } else if(ativacao) {
+            for(size_t i = 0; i < z.size(); i++) {
+                saida[i] = ativacao(z[i]);
+            }
+        } else {
+            saida = z; // linear
+        }
+        // cache da ativação(ou z se for softmax)
+        ativacaoCache = saida;
+        
+        return saida;
+    }
     
-    int calcularSaidaAltura() const;
-    int calcularSaidalargura() const;
-    void aplicarprenchimento(const std::vector<std::vector<std::vector<float>>>& entrada,
-    std::vector<std::vector<std::vector<float>>>& saidaComprenchimento) const;
+    vector<vector<float>> propLote(const vector<vector<float>>& entrada) override {
+        vector<vector<float>> saida;
+        
+        // processar cada exemplo sozinho
+        for(const auto& e : entrada) {
+            saida.push_back(prop(e));
+        }
+        return saida;
+    }
     
-    std::vector<std::vector<std::vector<std::vector<float>>>> criarGradFiltros() const;
+    vector<float> retroprop(const vector<float>& gradiente) override {
+        if(gradiente.size() != saidaDim) {
+            throw invalid_argument("Dimensão do gradiente incorreta");
+        }
+        // gradiente em relação a ativação
+        vector<float> gradAtivacao = gradiente;
+        
+        // se houver ativação(exceto softmax), aplica derivada
+        if(tipoAtivacao != "softmax" && tipoAtivacao != "linear" && derivadaAtivacao) {
+            for(size_t i = 0; i < gradAtivacao.size(); i++) {
+                gradAtivacao[i] *= derivadaAtivacao(ativacaoCache[i]);
+            }
+        }
+        // calcula gradientes dos pesos: dP = grad * entrada^T
+        for(size_t i = 0; i < saidaDim; i++) {
+            for(size_t j = 0; j < entradaDim; j++) {
+                gradPesos[i][j] += gradAtivacao[i] * entradaCache[j];
+            }
+        }
+        // gradiente do bias
+        if(usarBias) {
+            for(size_t i = 0; i < saidaDim; i++) {
+                gradBias[i] += gradAtivacao[i];
+            }
+        }
+        // gradiente pra camada anterior: dE/dx = P^T * grad
+        vector<float> gradEntrada(entradaDim, 0.0f);
+        for(size_t j = 0; j < entradaDim; j++) {
+            for(size_t i = 0; i < saidaDim; i++) {
+                gradEntrada[j] += pesos[i][j] * gradAtivacao[i];
+            }
+        }
+        return gradEntrada;
+    }
+    
+    void att(float taxaAprendizado) override {
+        if(otimizador) {
+            otimizador->att(pesos, gradPesos, bias, gradBias);
+        } else {
+            // atualiza pesos
+            for(size_t i = 0; i < saidaDim; i++) {
+                for(size_t j = 0; j < entradaDim; j++) {
+                    pesos[i][j] -= taxaAprendizado * gradPesos[i][j];
+                }
+            }
+            // atualiza bias
+            if(usarBias) {
+                for(size_t i = 0; i < saidaDim; i++) {
+                    bias[i] -= taxaAprendizado * gradBias[i];
+                }
+            }
+        }
+    }
+    
+    void zerarGradientes() override {
+        // zera gradientes dos pesos
+        for(auto& linha : gradPesos) {
+            fill(linha.begin(), linha.end(), 0.0f);
+        }
+        // zera gradientes do bias
+        fill(gradBias.begin(), gradBias.end(), 0.0f);
+    }
+    
+    void defPesos(const vector<vector<float>>& novosPesos) {
+        if(novosPesos.size() != saidaDim || novosPesos[0].size() != entradaDim) {
+            throw invalid_argument("Dimensões dos pesos incorretas");
+        }
+        pesos = novosPesos;
+    }
+    
+    void defBias(const vector<float>& novoBias) {
+        if(novoBias.size() != saidaDim) {
+            throw invalid_argument("Dimensão do bias incorreta");
+        }
+        bias = novoBias;
+    }
+    
+    // informações da camada
+    bool temParametros() const override { return true; }
+    size_t numParametros() const override { 
+        return saidaDim * entradaDim + (usarBias ? saidaDim : 0);
+    }
+    
+    // serialização
+    void salvar(const string& nomeArquivo) const override {
+        ofstream arquivo(nomeArquivo);
+        if(!arquivo) throw runtime_error("Não foi possível salvar a camada");
+        
+        arquivo << "DENSA_CAMADA" << endl;
+        arquivo << entradaDim << " " << saidaDim << endl;
+        arquivo << tipoAtivacao << " " << (usarBias ? 1 : 0) << endl;
+        
+        // salva pesos
+        for(const auto& linha : pesos) {
+            for(float p : linha) arquivo << p << " ";
+            arquivo << endl;
+        }
+        // salva bias
+        for(float b : bias) arquivo << b << " ";
+        arquivo << endl;
+        
+        arquivo.close();
+    }
+    
+    void carregar(const string& nomeArquivo) override {
+        ifstream arquivo(nomeArquivo);
+        if(!arquivo) throw runtime_error("Não foi possível carregar a camada");
+        
+        string tipo;
+        arquivo >> tipo;
+        if(tipo != "DENSA_CAMADA") {
+            throw runtime_error("Formato de arquivo inválido");
+        }
+        arquivo >> entradaDim >> saidaDim;
+        
+        int usarBiasInt;
+        arquivo >> tipoAtivacao >> usarBiasInt;
+        usarBias = (usarBiasInt == 1);
+        
+        configAtivacao(tipoAtivacao);
+        
+        // carrega pesos
+        pesos = vector<vector<float>>(saidaDim, vector<float>(entradaDim, 0.0f));
+        for(size_t i = 0; i < saidaDim; i++) {
+            for(size_t j = 0; j < entradaDim; j++) {
+                arquivo >> pesos[i][j];
+            }
+        }
+        // carrega bias
+        bias = vector<float>(saidaDim, 0.0f);
+        for(size_t i = 0; i < saidaDim; i++) {
+            arquivo >> bias[i];
+        }
+        arquivo.close();
+        
+        // reinicia gradientes com dimensões certas
+        gradPesos = vector<vector<float>>(saidaDim, vector<float>(entradaDim, 0.0f));
+        gradBias = vector<float>(saidaDim, 0.0f);
+    }
 };
-
-inline CamadaConv::CamadaConv(int entradaAltura, int entradaLargura, int entradaCanais, int numFiltros, int filtroTamanho, int passo, int prenchimento, float taxaDropout)
-    : entradaAltura_(entradaAltura), entradaLargura_(entradaLargura), 
-      entradaCanais_(entradaCanais), numFiltros_(numFiltros),
-      filtroTam_(filtroTamanho), passo_(passo), prenchimento_(prenchimento),
-      taxaDropout_(taxaDropout), iteracao_(1) {
-    
-    float escala = std::sqrt(2.0f / (filtroTamanho * filtroTamanho * entradaCanais));
-    
-    filtros_.resize(numFiltros);
-    mFiltros_.resize(numFiltros);
-    vFiltros_.resize(numFiltros);
-    
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::normal_distribution<float> dist(0.0f, escala);
-    
-    for(int f = 0; f < numFiltros; ++f) {
-        filtros_[f].resize(entradaCanais);
-        mFiltros_[f].resize(entradaCanais);
-        vFiltros_[f].resize(entradaCanais);
-        
-        for(int c = 0; c < entradaCanais; ++c) {
-            filtros_[f][c].resize(filtroTamanho, std::vector<float>(filtroTamanho));
-            mFiltros_[f][c].resize(filtroTamanho, std::vector<float>(filtroTamanho, 0.0f));
-            vFiltros_[f][c].resize(filtroTamanho, std::vector<float>(filtroTamanho, 0.0f));
-            
-            for(int i = 0; i < filtroTamanho; ++i) {
-                for(int j = 0; j < filtroTamanho; ++j) {
-                    filtros_[f][c][i][j] = dist(gen);
-                }
-            }
-        }
-    }
-    biases_.resize(numFiltros, 0.1f);
-    mBiases_.resize(numFiltros, 0.0f);
-    vBiases_.resize(numFiltros, 0.0f);
-}
-
-inline std::vector<std::vector<std::vector<std::vector<float>>>> CamadaConv::criarGradFiltros() const {
-    std::vector<std::vector<std::vector<std::vector<float>>>> gradFiltros(
-        numFiltros_,
-        std::vector<std::vector<std::vector<float>>>(
-            entradaCanais_,
-            std::vector<std::vector<float>>(
-                filtroTam_,
-                std::vector<float>(filtroTam_, 0.0f))));
-    return gradFiltros;
-}
-
-inline int CamadaConv::calcularSaidaAltura() const {
-    return (entradaAltura_ + 2 * prenchimento_ - filtroTam_) / passo_ + 1;
-}
-
-inline int CamadaConv::calcularSaidalargura() const {
-    return (entradaLargura_ + 2 * prenchimento_ - filtroTam_) / passo_ + 1;
-}
-
-inline void CamadaConv::aplicarprenchimento(const std::vector<std::vector<std::vector<float>>>& entrada, std::vector<std::vector<std::vector<float>>>& saidaComprenchimento) const {
-    int novaAltura = entradaAltura_ + 2 * prenchimento_;
-    int novaLargura = entradaLargura_ + 2 * prenchimento_;
-    
-    saidaComprenchimento.resize(entradaCanais_, 
-    std::vector<std::vector<float>>(novaAltura, 
-    std::vector<float>(novaLargura, 0.0f)));
-    
-    for(int c = 0; c < entradaCanais_; ++c) {
-        for(int i = 0; i < entradaAltura_; ++i) {
-            for(int j = 0; j < entradaLargura_; ++j) {
-                saidaComprenchimento[c][i + prenchimento_][j + prenchimento_] = entrada[c][i][j];
-            }
-        }
-    }
-}
-
-inline std::vector<std::vector<std::vector<float>>> CamadaConv::propagar(
-    const std::vector<std::vector<std::vector<float>>>& entrada, bool treino) {
-    
-    cacheEntrada_ = entrada;
-    
-    int saidaAltura = calcularSaidaAltura();
-    int saidaLargura = calcularSaidalargura();
-    
-    std::vector<std::vector<std::vector<float>>> entradaComprenchimento;
-    if(prenchimento_ > 0) {
-        aplicarprenchimento(entrada, entradaComprenchimento);
-    } else {
-        entradaComprenchimento = entrada;
-    }
-    std::vector<std::vector<std::vector<float>>> saida(
-        numFiltros_, 
-        std::vector<std::vector<float>>(saidaAltura, 
-        std::vector<float>(saidaLargura, 0.0f)));
-    // convolução
-    for(int filtro = 0; filtro < numFiltros_; ++filtro) {
-        for(int i = 0; i < saidaAltura; ++i) {
-            for(int j = 0; j < saidaLargura; ++j) {
-                float soma = biases_[filtro];
-                int inicioAltura = i * passo_;
-                int inicioLargura = j * passo_;
-                // aplica filtro
-                for(int canal = 0; canal < entradaCanais_; ++canal) {
-                    for(int fi = 0; fi < filtroTam_; ++fi) {
-                        for(int fj = 0; fj < filtroTam_; ++fj) {
-                            int posAltura = inicioAltura + fi;
-                            int posLargura = inicioLargura + fj;
-                            
-                            soma += entradaComprenchimento[canal][posAltura][posLargura] * 
-                                   filtros_[filtro][canal][fi][fj];
-                        }
-                    }
-                }
-                // aplica ReLU
-                saida[filtro][i][j] = std::max(0.0f, soma);
-            }
-        }
-    }
-    cacheSaida_ = saida;
-    // dropout
-    if(treino && taxaDropout_ > 0.0f) {
-        cacheMascaraDropout_.resize(numFiltros_);
-        float escala = 1.0f / (1.0f - taxaDropout_);
-        
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-        
-        for(int filtro = 0; filtro < numFiltros_; ++filtro) {
-            cacheMascaraDropout_[filtro].resize(saidaAltura, 
-            std::vector<bool>(saidaLargura, false));
-            
-            for(int i = 0; i < saidaAltura; ++i) {
-                for(int j = 0; j < saidaLargura; ++j) {
-                    if(dist(gen) < taxaDropout_) {
-                        saida[filtro][i][j] = 0.0f;
-                        cacheMascaraDropout_[filtro][i][j] = false;
-                    } else {
-                        saida[filtro][i][j] *= escala;
-                        cacheMascaraDropout_[filtro][i][j] = true;
-                    }
-                }
-            }
-        }
-    }
-    return saida;
-}
-
-inline std::vector<std::vector<std::vector<float>>> CamadaConv::retropropagar(
-    const std::vector<std::vector<std::vector<float>>>& gradSaida,
-    float taxaAprendizado, float lambda) {
-    
-    int saidaAltura = calcularSaidaAltura();
-    int saidaLargura = calcularSaidalargura();
-    
-    // gradientes pra filtros e biases
-    auto gradFiltros = criarGradFiltros();
-    std::vector<float> gradBiases(numFiltros_, 0.0f);
-    // gradiente pra a entrada anterior
-    std::vector<std::vector<std::vector<float>>> gradEntrada(
-        entradaCanais_,
-        std::vector<std::vector<float>>(entradaAltura_ + 2 * prenchimento_,
-        std::vector<float>(entradaLargura_ + 2 * prenchimento_, 0.0f)));
-        
-    std::vector<std::vector<std::vector<float>>> entradaComprenchimento;
-    aplicarprenchimento(cacheEntrada_, entradaComprenchimento);
-    // calculo dos gradientes
-    for(int filtro = 0; filtro < numFiltros_; ++filtro) {
-        for(int i = 0; i < saidaAltura; ++i) {
-            for(int j = 0; j < saidaLargura; ++j) {
-                // pula se dropout aplicado
-                if(!cacheMascaraDropout_.empty() && 
-                   !cacheMascaraDropout_[filtro][i][j]) {
-                    continue;
-                }
-                float grad = gradSaida[filtro][i][j];
-                // aplica gradiente da ReLU
-                if(cacheSaida_[filtro][i][j] <= 0) {
-                    grad = 0.0f;
-                }
-                gradBiases[filtro] += grad;
-                
-                int inicioAltura = i * passo_;
-                int inicioLargura = j * passo_;
-                // att gradientes dos filtros
-                for(int canal = 0; canal < entradaCanais_; ++canal) {
-                    for(int fi = 0; fi < filtroTam_; ++fi) {
-                        for(int fj = 0; fj < filtroTam_; ++fj) {
-                            int posAltura = inicioAltura + fi;
-                            int posLargura = inicioLargura + fj;
-                            
-                            gradFiltros[filtro][canal][fi][fj] += 
-                                grad * entradaComprenchimento[canal][posAltura][posLargura];
-                        }
-                    }
-                }
-                // calcula gradiente pra entrada anterior
-                for(int canal = 0; canal < entradaCanais_; ++canal) {
-                    for(int fi = 0; fi < filtroTam_; ++fi) {
-                        for(int fj = 0; fj < filtroTam_; ++fj) {
-                            int posAltura = inicioAltura + fi;
-                            int posLargura = inicioLargura + fj;
-                            
-                            gradEntrada[canal][posAltura][posLargura] += 
-                                grad * filtros_[filtro][canal][fi][fj];
-                        }
-                    }
-                }
-            }
-        }
-    }
-    std::vector<std::vector<std::vector<float>>> gradEntradaFinal(
-        entradaCanais_,
-        std::vector<std::vector<float>>(entradaAltura_,
-        std::vector<float>(entradaLargura_, 0.0f)));
-    
-    for(int canal = 0; canal < entradaCanais_; ++canal) {
-        for(int i = 0; i < entradaAltura_; ++i) {
-            for(int j = 0; j < entradaLargura_; ++j) {
-                gradEntradaFinal[canal][i][j] = 
-                    gradEntrada[canal][i + prenchimento_][j + prenchimento_];
-            }
-        }
-    }
-    for(int filtro = 0; filtro < numFiltros_; ++filtro) {
-        for(int canal = 0; canal < entradaCanais_; ++canal) {
-            for(int fi = 0; fi < filtroTam_; ++fi) {
-                for(int fj = 0; fj < filtroTam_; ++fj) {
-                    float g = gradFiltros[filtro][canal][fi][fj] + 
-                             lambda * filtros_[filtro][canal][fi][fj];
-                    
-                    mFiltros_[filtro][canal][fi][fj] = 0.9f * mFiltros_[filtro][canal][fi][fj] + 
-                                                       0.1f * g;
-                    vFiltros_[filtro][canal][fi][fj] = 0.999f * vFiltros_[filtro][canal][fi][fj] + 
-                                                       0.001f * g * g;
-                    
-                    float mCorrigido = mFiltros_[filtro][canal][fi][fj] / 
-                                     (1 - std::pow(0.9f, iteracao_));
-                    float vCorrigido = vFiltros_[filtro][canal][fi][fj] / 
-                                     (1 - std::pow(0.999f, iteracao_));
-                    
-                    filtros_[filtro][canal][fi][fj] -= 
-                        taxaAprendizado * mCorrigido / (std::sqrt(vCorrigido) + 1e-8f);
-                }
-            }
-        }
-        float gBias = gradBiases[filtro] + lambda * biases_[filtro];
-        mBiases_[filtro] = 0.9f * mBiases_[filtro] + 0.1f * gBias;
-        vBiases_[filtro] = 0.999f * vBiases_[filtro] + 0.001f * gBias * gBias;
-        
-        float mBiasCorrigido = mBiases_[filtro] / (1 - std::pow(0.9f, iteracao_));
-        float vBiasCorrigido = vBiases_[filtro] / (1 - std::pow(0.999f, iteracao_));
-        
-        biases_[filtro] -= taxaAprendizado * mBiasCorrigido / (std::sqrt(vBiasCorrigido) + 1e-8f);
-    }
-    iteracao_++;
-    return gradEntradaFinal;
-}
-
-inline void CamadaConv::imprimirInfo() const {
-    std::cout << "Camada Conv - Entrada: " << entradaAltura_ << "x" << entradaLargura_ 
-              << "x" << entradaCanais_ << " | Filtros: " << numFiltros_ 
-              << " (" << filtroTam_ << "x" << filtroTam_ << ") | Saída: " 
-              << calcularSaidaAltura() << "x" << calcularSaidalargura() 
-              << "x" << numFiltros_ << std::endl;
-}
-inline void CamadaConv::defFiltro(int filtroIdc, int canalIdc, const std::vector<std::vector<float>>& filtro) {
-    if(filtroIdc >= 0 && filtroIdc < numFiltros_ && 
-       canalIdc >= 0 && canalIdc < entradaCanais_ &&
-       filtro.size() == filtroTam_ && 
-       filtro[0].size() == filtroTam_) {
-        filtros_[filtroIdc][canalIdc] = filtro;
-    }
-}
-
-inline void CamadaConv::defBias(int filtroIdc, float bias) {
-    if(filtroIdc >= 0 && filtroIdc < numFiltros_) {
-        biases_[filtroIdc] = bias;
-    }
-}
-
-void testeCC() {
-    std::cout << "\n=== TESTE CAMADA CONVOLUCIONAL ===\n\n";
-    
-    std::cout << "🔍 TESTE 1: Detecção de Bordas\n";
-    {
-        CamadaConv conv(5, 5, 1, 1, 3, 1, 1, 0.0f);
-        
-        // filtro de detecção de bordas horizontal manual
-        std::vector<std::vector<float>> filtroBorda = {
-            {-1, -1, -1},
-            {0, 0, 0},
-            {1, 1, 1}
-        };
-        conv.defFiltro(0, 0, filtroBorda);
-        conv.defBias(0, 0.0f);
-        
-        // imagem de teste(borda horizontal no meio)
-        std::vector<std::vector<std::vector<float>>> imagem = {{
-            {0, 0, 0, 0, 0},
-            {0, 0, 0, 0, 0},
-            {1, 1, 1, 1, 1},
-            {0, 0, 0, 0, 0},
-            {0, 0, 0, 0, 0}
-        }};
-        auto saida = conv.propagar(imagem, false);
-        
-        std::cout << "Entrada (borda horizontal):\n";
-        for(const auto& linha : imagem[0]) {
-            for(float val : linha) std::cout << val << " ";
-            std::cout << "\n";
-        }
-        std::cout << "Saída (detecção de bordas):\n";
-        for(const auto& linha : saida[0]) {
-            for(float val : linha) std::cout << val << " ";
-            std::cout << "\n";
-        }
-        // verifica se detectou a borda
-        float maxVal = 0.0f;
-        for(const auto& linha : saida[0]) {
-            for(float val : linha) maxVal = std::max(maxVal, val);
-        }
-        if(maxVal > 2.0f) {
-            std::cout << "✅ DETECÇÃO DE BORDAS FUNCIONANDO\n";
-        } else {
-            std::cout << "❌ FALHA NA DETECÇÃO\n";
-        }
-    }
-    std::cout << "\n🎯 TESTE 2: Aprendizado de Padrões Convolucionais\n";
-    {
-        const int epocas = 300;
-        const float taxaAprendizado = 0.01f;
-        
-        CamadaConv conv(3, 3, 1, 1, 2, 1, 0, 0.0f);
-        
-        std::vector<std::vector<std::vector<float>>> entrada = {{
-            {1, 0, 0},
-            {0, 1, 0}, 
-            {0, 0, 1}
-        }};
-        auto saidaEsperada = zeros3D(1, 2, 2);
-        saidaEsperada[0][0][0] = 0.8f;  // canto superior esquerdo
-        saidaEsperada[0][1][1] = 0.8f;  // canto inferior direito
-        
-        std::cout << "Entrada (diagonal):\n";
-        for(const auto& linha : entrada[0]) {
-            for(float val : linha) std::cout << val << " ";
-            std::cout << "\n";
-        }
-        std::cout << "Saída esperada (cantos):\n";
-        for(const auto& linha : saidaEsperada[0]) {
-            for(float val : linha) std::cout << val << " ";
-            std::cout << "\n";
-        }
-        std::vector<float> historicoErro;
-        
-        for(int epoca = 0; epoca < epocas; ++epoca) {
-            auto saida = conv.propagar(entrada, true);
-            
-            float erro = 0.0f;
-            auto gradSaida = zeros3D(1, 2, 2);
-            
-            float diff1 = saida[0][0][0] - saidaEsperada[0][0][0];
-            float diff2 = saida[0][1][1] - saidaEsperada[0][1][1];
-            
-            erro = 0.5f * (diff1 * diff1 + diff2 * diff2);
-            gradSaida[0][0][0] = diff1;
-            gradSaida[0][1][1] = diff2;
-            
-            historicoErro.push_back(erro);
-            
-            if(epoca % 50 == 0) {
-                std::cout << "Época " << epoca << " - Erro: " << erro;
-                if(erro < 0.1f) std::cout << " ✅";
-                std::cout << "\n";
-            }
-            conv.retropropagar(gradSaida, taxaAprendizado, 0.001f);
-        }
-        auto saidaFinal = conv.propagar(entrada, false);
-        std::cout << "\nSaída final:\n";
-        for(const auto& linha : saidaFinal[0]) {
-            for(float val : linha) std::cout << val << " ";
-            std::cout << "\n";
-        }
-        float erroFinal = 0.5f * (
-            pow(saidaFinal[0][0][0] - saidaEsperada[0][0][0], 2) +
-            pow(saidaFinal[0][1][1] - saidaEsperada[0][1][1], 2)
-        );
-        std::cout << "Erro final: " << erroFinal << " | ";
-        if(erroFinal < 0.05f) {
-            std::cout << "✅ APRENDIZADO CONVOLUCIONAL BEM-SUCEDIDO\n";
-        } else if(erroFinal < 0.1f) {
-            std::cout << "⚠️  APRENDIZADO PARCIAL\n";
-        } else {
-            std::cout << "❌ FALHA NO APRENDIZADO\n";
-        }
-    }
-    std::cout << "\n⚡ TESTE 3: Performance com Dimensões Reais\n";
-    {
-        auto inicio = std::chrono::high_resolution_clock::now();
-        
-        CamadaConv conv(32, 32, 3, 16, 3, 1, 1, 0.2f);
-        
-        const int loteTam = 8;
-        std::vector<std::vector<std::vector<std::vector<float>>>> batch(
-            loteTam, 
-            std::vector<std::vector<std::vector<float>>>(
-                3,
-                std::vector<std::vector<float>>(
-                    32,
-                    std::vector<float>(32, 1.0f))));
-        
-        std::vector<std::vector<std::vector<std::vector<float>>>> saidas;
-        for(int i = 0; i < loteTam; ++i) {
-            saidas.push_back(conv.propagar(batch[i], true));
-        }
-        for(int i = 0; i < loteTam; ++i) {
-            auto grad = saidas[i];
-            for(auto& canal : grad) {
-                for(auto& linha : canal) {
-                    for(auto& val : linha) {
-                        val = (val - 0.5f) / loteTam;
-                    }
-                }
-            }
-            conv.retropropagar(grad, 0.001f);
-        }
-        auto fim = std::chrono::high_resolution_clock::now();
-        auto duracao = std::chrono::duration_cast<std::chrono::milliseconds>(fim - inicio);
-        
-        std::cout << "Processamento de " << loteTam << " imagens 32x32x3 → 16 filtros\n";
-        std::cout << "Tempo total: " << duracao.count() << "ms\n";
-        
-        double operacoes = loteTam * 16 * 32 * 32 * 3 * 3 * 3 * 2;
-        double segundos = duracao.count() / 1000.0;
-        
-        std::cout << "Performance: " << operacoes / segundos / 1e6 << " MFLOPS\n";
-        
-        if(duracao.count() < 1000) {
-            std::cout << "✅ PERFORMANCE ADEQUADA\n";
-        } else {
-            std::cout << "⚠️  PERFORMANCE A MELHORAR\n";
-        }
-    }
-    std::cout << "\n📐 TESTE 4: Verificação de Dimensões\n";
-    {
-        std::vector<std::tuple<int, int, int, int, int, int, int>> testes = {
-            {28, 28, 1, 8, 3, 1, 0},   // MNIST-like
-            {32, 32, 3, 16, 5, 1, 2},  // CIFAR-like  
-            {64, 64, 3, 32, 7, 2, 1}   // imagem maior
-        };
-        for(const auto& teste : testes) {
-            auto [h, w, c, f, k, s, p] = teste;
-            
-            CamadaConv conv(h, w, c, f, k, s, p);
-            auto saida = conv.propagar(zeros3D(c, h, w), false);
-            
-            int saidaH = (h + 2*p - k) / s + 1;
-            int saidaW = (w + 2*p - k) / s + 1;
-            
-            bool dimensoesCorretas = (saida.size() == f) &&  (saida[0].size() == saidaH) && (saida[0][0].size() == saidaW);
-            
-            std::cout << "Entrada " << h << "x" << w << "x" << c << " → Saída " << saidaH << "x" << saidaW << "x" << f<< " - " << (dimensoesCorretas ? "✅" : "❌") << "\n";
-        }
-    }
-}
-// ATENÇÃO:
-class CamadaAtencao {
-public:
-    CamadaAtencao(int dimEntrada, int dimConC, int dimV, float temperaturaInicial = 0.45f, float lambdaFocoInicial = 0.00005f); 
-
-    std::vector<std::vector<float>> propagar(const std::vector<std::vector<float>>& entrada, bool treino = true);
-    
-    std::vector<std::vector<float>> retropropagar(const std::vector<std::vector<float>>& gradSaida, float taxaAprendizado, float lambda = 1e-4f);
-    
-    void setTemperatura(float temp) { temperatura_ = temp; }
-    void setLambdaFoco(float foco) { lambdaFoco_ = foco; }
-    
-    int dimEntrada_, dimQC_, dimV_;
-    
-    float escala_; 
-    float temperatura_;
-    float lambdaFoco_;
-    
-    // pesos
-    std::vector<std::vector<float>> pCon_, pC_, pV_;
-
-    // buffers adam
-    std::vector<std::vector<float>> mCon_, vCon_;
-    std::vector<std::vector<float>> mC_, vC_;
-    std::vector<std::vector<float>> mV_, vV_;
-    int iteracao_;
-
-    // cache para retroprop
-    std::vector<std::vector<float>> cacheEntrada_;
-    std::vector<std::vector<float>> cacheCon_, cacheC_, cacheV_;
-    std::vector<std::vector<float>> cachePesosAtencao_; // pesos de atenção após o softmax
-};
-
-inline CamadaAtencao::CamadaAtencao(int dimEntrada, int dimConC, int dimV, float temperaturaInicial, float lambdaFocoInicial)
-    : dimEntrada_(dimEntrada), dimQC_(dimConC), dimV_(dimV), iteracao_(1), temperatura_(temperaturaInicial), lambdaFoco_(lambdaFocoInicial) {
-    
-    pCon_ = iniPesosXavier(dimEntrada, dimConC);
-    pC_ = iniPesosXavier(dimEntrada, dimConC);
-    pV_ = iniPesosXavier(dimEntrada, dimV);
-
-    // fator de escala para a atenção
-    escala_ = std::sqrt(static_cast<float>(dimConC));
-    if(escala_ < 1.0f) escala_ = 1.0f; 
-
-    // buffers adam
-    mCon_ = matrizZeros(dimEntrada, dimConC); vCon_ = matrizZeros(dimEntrada, dimConC);
-    mC_ = matrizZeros(dimEntrada, dimConC); vC_ = matrizZeros(dimEntrada, dimConC);
-    mV_ = matrizZeros(dimEntrada, dimV);  vV_ = matrizZeros(dimEntrada, dimV);
-}
-
-inline std::vector<std::vector<float>> CamadaAtencao::propagar(const std::vector<std::vector<float>>& entrada, bool treino) {
-    auto CON = multMatrizes(entrada, pCon_);
-    auto C = multMatrizes(entrada, pC_);
-    auto V = multMatrizes(entrada, pV_);
-
-    auto pontos = multMatrizes(CON, transpor(C));
-
-    // fatorEscalaComTemp = sqrt(d_k) * temperatura
-    float fatorEscalaComTemp = escala_ * temperatura_;
-    auto pontosEscalados = multMatriz(pontos, 1.0f / fatorEscalaComTemp);
-
-    // softmax pra obter os pesos de atenção(mais nítidos devido a temp < 1)
-    auto pesosAtencao = softmaxLote(pontosEscalados);
-
-    auto saida = multMatrizes(pesosAtencao, V);
-
-    if(treino) {
-        cacheEntrada_ = entrada;
-        cacheCon_ = CON;
-        cacheC_ = C;
-        cacheV_ = V;
-        cachePesosAtencao_ = pesosAtencao;
-    }
-    return saida;
-}
-
-inline std::vector<std::vector<float>> CamadaAtencao::retropropagar(const std::vector<std::vector<float>>& gradSaida, float taxaAprendizado, float lambda) {
-    auto gradV = multMatrizes(transpor(cachePesosAtencao_), gradSaida);
-    auto gradPesosAtencao = multMatrizes(gradSaida, transpor(cacheV_));
-    
-    std::vector<std::vector<float>> gradpontos(gradPesosAtencao.size(), std::vector<float>(gradPesosAtencao[0].size()));
-    for(size_t i = 0; i < gradPesosAtencao.size(); ++i) {
-        gradpontos[i] = derivadaSoftmax(cachePesosAtencao_[i], gradPesosAtencao[i]);
-    }
-    // injeta o gradiente de penalidade RF(Regulamentação de Foco)
-    // O gradiente da penalidade é adicionado ao gradiente de erro principal
-    if(lambdaFoco_ > 0.0f) {
-        for(size_t i = 0; i < gradpontos.size(); ++i) {
-            for(size_t j = 0; j < gradpontos[0].size(); ++j) {
-                // penaliza a uniformidade(força o foco)
-                gradpontos[i][j] += (2.0f * lambdaFoco_ * cachePesosAtencao_[i][j]);
-            }
-        }
-    }
-    // desfaz a escala dos pontos(com a Temperatura)
-    float fatorEscalaComTemp = escala_ * temperatura_;
-    gradpontos = multMatriz(gradpontos, 1.0f / fatorEscalaComTemp);
-
-    // calcula gradientes em relação a Q e K
-    auto gradK = multMatrizes(transpor(gradpontos), cacheCon_);
-    auto gradQ = multMatrizes(gradpontos, cacheC_);
-
-    // calcula gradientes pra as matrizes de pesos pQ, pK, pV
-    auto gradPQ = multMatrizes(transpor(cacheEntrada_), gradQ);
-    auto gradPK = multMatrizes(transpor(cacheEntrada_), gradK);
-    auto gradPV = multMatrizes(transpor(cacheEntrada_), gradV);
-    
-    // atualiza os pesos usando adam
-    pCon_ = attPesosAdam(pCon_, gradPQ, mCon_, vCon_, taxaAprendizado, 0.9f, 0.999f, 1e-8f, iteracao_, lambda);
-    pC_ = attPesosAdam(pC_, gradPK, mC_, vC_, taxaAprendizado, 0.9f, 0.999f, 1e-8f, iteracao_, lambda);
-    pV_ = attPesosAdam(pV_, gradPV, mV_, vV_, taxaAprendizado, 0.9f, 0.999f, 1e-8f, iteracao_, lambda);
-    iteracao_++;
-
-    // gradiente a ser propagado pra a camada anterior
-    auto gradEntrada = somarMatriz(
-        somarMatriz(
-            multMatrizes(gradQ, transpor(pCon_)),
-            multMatrizes(gradK, transpor(pC_))),
-        multMatrizes(gradV, transpor(pV_)));
-    
-    return gradEntrada;
-}
-
-void testeCA() {
-    std::cout << "\n\n=== TESTE CAMADA ATENÇÃO ===";
-
-    const int tamSequencia = 4;
-    const int dimEntrada = 32;
-    const int dimConC = 16;
-    const int dimV = 32;
-    const int epocas = 1000;
-    const float taxaAprendizado = 0.001f;
-
-    CamadaAtencao camada(dimEntrada, dimConC, dimV);
-
-    std::cout << "\n--- 📐 Verificação de Dimensões ---\n";
-    auto entradaTeste = matriz(tamSequencia, dimEntrada, 0.1f);
-    auto saidaTeste = camada.propagar(entradaTeste, false);
-
-    bool dimensoesCorretas = (saidaTeste.size() == tamSequencia) && (saidaTeste[0].size() == dimV);
-    std::cout << "Status: " << (dimensoesCorretas ? "✅ SUCESSO" : "❌ FALHA") << "\n";
-
-    std::cout << "\n--- 🎯 Treino com Dados Consistentes ---\n";
-    std::cout << "Objetivo: 1º elemento → 3º elemento (dados FIXOS para aprendizado)\n\n";
-
-    auto entradaBase = matriz(tamSequencia, dimEntrada, 0.5f);
-    for(int j = 0; j < dimEntrada; j++) {
-        entradaBase[2][j] = entradaBase[0][j] + 0.3f; // padrão claro
-    }
-    std::vector<float> historicoErro;
-    float melhorErro = 1.0f;
-
-    for(int i = 0; i < epocas; ++i) {
-        auto entradaTreino = entradaBase;
-        for(int k = 0; k < tamSequencia; k++) {
-            entradaTreino[k] = addRuido(entradaTreino[k], 0.02f);
-        }
-        auto saidaEsperada = entradaTreino[2]; // alvo: elemento 2
-        auto saida = camada.propagar(entradaTreino, true);
-        
-        float erroEpoca = mse(saida[0], saidaEsperada);
-        historicoErro.push_back(erroEpoca);
-        melhorErro = std::min(melhorErro, erroEpoca);
-
-        auto gradSaida = matrizZeros(tamSequencia, dimV);
-        for(int j = 0; j < dimV; ++j) {
-            float diff = saida[0][j] - saidaEsperada[j];
-            gradSaida[0][j] = 2.0f * diff / dimV;
-        }
-        camada.retropropagar(gradSaida, taxaAprendizado, 1e-5f);
-
-        if((i + 1) % 100 == 0) {
-            std::cout << "Época [" << std::setw(3) << i + 1 << "] - Erro: " 
-                      << std::fixed << std::setprecision(4) << erroEpoca;
-            if(erroEpoca < 0.1f) std::cout << " ✅";
-            std::cout << "\n";
-        }
-    }
-    std::cout << "\n--- 📊 Resultados Finais ---\n";
-    std::cout << "Melhor erro alcançado: " << std::fixed << std::setprecision(4) << melhorErro << "\n";
-    
-    bool sucesso = melhorErro < 0.1f;
-    std::cout << "Status: " << (sucesso ? "✅ APRENDIZADO BEM-SUCEDIDO" : "⚠️  APRENDIZADO PARCIAL") << "\n";
-
-    std::cout << "\n--- 🔍 Análise dos Pesos de Atenção ---\n";
-    auto entradaFinal = entradaBase;
-    camada.propagar(entradaFinal, false);
-    auto pesosFinais = camada.cachePesosAtencao_;
-
-    std::cout << "Distribuição de atenção do 1º elemento:\n";
-    int indiceMaiorPeso = -1;
-    float maiorPeso = -1.0f;
-    
-    for(int j = 0; j < tamSequencia; ++j) {
-        float peso = pesosFinais[0][j];
-        std::cout << "  Elemento " << j + 1 << ": " << std::fixed << std::setprecision(3) 
-                  << peso << " (" << std::setprecision(1) << peso * 100.0f << "%)";
-        if(j == 2) std::cout << " ← ALVO";
-        std::cout << "\n";
-        
-        if(peso > maiorPeso) {
-            maiorPeso = peso;
-            indiceMaiorPeso = j;
-        }
-    }
-    bool focoCorreto = (indiceMaiorPeso == 2);
-    std::cout << "\n🎯 Foco principal: Elemento " << indiceMaiorPeso + 1 
-              << " - " << (focoCorreto ? "✅ CORRETO!" : "❌ INCORRETO!") << "\n";
-
-    std::cout << "\n--- 📈 Resumo do Desempenho ---\n";
-    if(sucesso && focoCorreto) {
-        std::cout << "🎉 EXCELENTE: Camada de atenção funcionando perfeitamente!\n";
-    } else if(sucesso) {
-        std::cout << "⚠️  BOM: Aprendizado ocorreu mas o foco não está ideal\n";
-    } else {
-        std::cout << "🔧 AJUSTES NECESSÁRIOS: Considere aumentar dimensões ou épocas\n";
-    }
-}
