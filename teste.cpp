@@ -9,7 +9,7 @@ void testeCD1() {
 
     // teste 1: camada linear simples
     cout << "1. Teste camada linear (sem ativação):\n";
-    Densa camada1(3, 2, "linear");
+    Densa camada1(3, 2, "linear", true, "densa1");
 
     // define pesos manualmente pra teste deterministico
     camada1.defPesos({{0.1f, 0.2f, 0.3f}, {0.4f, 0.5f, 0.6f}});
@@ -41,7 +41,7 @@ void testeCD1() {
 
     // teste 4: camada com ativação sigmoid
     cout << "4. Teste camada com sigmoid:\n";
-    Densa camada2(2, 2, "sigmoid");
+    Densa camada2(2, 2, "sigmoid", true, "densa2");
     camada2.defPesos({{0.5f, -0.3f}, {0.2f, 0.8f}});
     camada2.defBias({0.1f, -0.1f});
 
@@ -56,7 +56,7 @@ void testeCD1() {
 
     // teste 5: processamento em lote
     cout << "5. Teste processamento em lote:\n";
-    Densa camada3(2, 1, "relu");
+    Densa camada3(2, 1, "relu", true, "densa3");
     vector<vector<float>> lote = {
         {1.0f, 2.0f},
         {3.0f, 4.0f},
@@ -67,6 +67,7 @@ void testeCD1() {
 
     // teste 6: informações da camada
     cout << "\n6. Informações da camada:\n";
+    cout << "Nome: " << camada1.nome << endl;
     cout << "Tipo: " << camada1.tipo << endl;
     cout << "Tem parâmetros: " << (camada1.temParametros() ? "Sim" : "Não") << endl;
     cout << "Número de parâmetros: " << camada1.numParametros() << endl;
@@ -75,7 +76,7 @@ void testeCD1() {
 void testeCD2() {
     // teste 7: camada sem bias
     cout << "7. Teste camada SEM bias:\n";
-    Densa camadaSemBias(2, 3, "linear", false);
+    Densa camadaSemBias(2, 3, "linear", false, "densa4");
     camadaSemBias.defPesos({{0.1f, 0.2f}, {0.3f, 0.4f}, {0.5f, 0.6f}});
 
     vector<float> entrada7 = {1.0f, 2.0f};
@@ -94,7 +95,7 @@ void testeCD2() {
     // teste 8: diferentes funções de ativação
     cout << "8. Teste diferentes funções de ativação:\n";
 
-    Densa camadaReLU(2, 2, "relu");
+    Densa camadaReLU(2, 2, "relu", true, "densa5");
     camadaReLU.defPesos({{1.0f, -1.0f}, {0.5f, 0.5f}});
     camadaReLU.defBias({-0.5f, 0.0f});
 
@@ -103,7 +104,7 @@ void testeCD2() {
     cout << "ReLU entrada [" << entrada8[0] << ", " << entrada8[1] << "]: ";
     cout << "[" << saidaReLU[0] << ", " << saidaReLU[1] << "]\n";
 
-    Densa camadaTanh(2, 1, "tanh");
+    Densa camadaTanh(2, 1, "tanh", true, "densa6");
     camadaTanh.defPesos({{0.5f, -0.3f}});
     camadaTanh.defBias({0.2f});
 
@@ -114,7 +115,7 @@ void testeCD2() {
 
     // teste 9: softmax
     cout << "9. Teste camada com softmax:\n";
-    Densa camadaSoftmax(3, 3, "softmax");
+    Densa camadaSoftmax(3, 3, "softmax", true, "densa7");
     camadaSoftmax.defPesos({
         {0.1f, 0.2f, 0.3f},
         {0.4f, 0.5f, 0.6f},

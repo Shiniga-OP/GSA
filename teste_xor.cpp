@@ -1,3 +1,4 @@
+// teste_xor.cpp
 #include <iostream>
 #include <vector>
 #include <iomanip>

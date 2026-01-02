@@ -5,7 +5,7 @@ em desenvolvimento com a biblioteca própria.
 1. ativações: degrau, sigmoid, tanh, ReLU, GELU, e etc, + deverivadas.
 2. tokenizadores: tokenzador sub palavra.
 3. utilitários: pesos, atualização de pesos, perda, erro, saída, métricas, matrizes 2D/3D + vetores.
-4. camaadas: camada densa.
+4. camadas: camada densa, camada dropout.
 5. otimizadores: Adam, AdamW, SGD, AdaGrad, RMSprop, AdaDelta, Nesterov.
 
 implementação feita do zero, sem bibliotecas de IA prontas (escrita no Android via Termux e CodeEditor).
@@ -13,6 +13,7 @@ implementação feita do zero, sem bibliotecas de IA prontas (escrita no Android
 ## arquivos:
 
 * teste_xor.cpp: testa o aprendizado não linear e treinamento por lote da camada densa.
+* teste_dropout.cpp: testa a prevenção de overfit com dropout e modelo multi camadas.
 * teste.cpp:
 ```Cpp
 // teste.cpp

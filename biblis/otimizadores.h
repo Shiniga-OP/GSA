@@ -1,5 +1,5 @@
-#pragma once
 // biblis/otimizadores.h
+#pragma once
 class Otimizador {
 public:
     virtual ~Otimizador() = default;
@@ -26,7 +26,7 @@ public:
     vector<float>& bias,
     vector<float>& gradBias) override {
         t++;
-        // inicia o cache se tiver vazio
+        // inicia o cache se estiver vazio
         if(m_pesos.empty()) {
             m_pesos = matrizZeros(pesos.size(), pesos[0].size());
             v_pesos = matrizZeros(pesos.size(), pesos[0].size());
@@ -49,10 +49,9 @@ public:
         : taxa(taxa), momentum(momentum) {}
     
     void att(vector<vector<float>>& pesos,
-             vector<vector<float>>& gradPesos,
-             vector<float>& bias,
-             vector<float>& gradBias) override {
-                 
+    vector<vector<float>>& gradPesos,
+    vector<float>& bias,
+    vector<float>& gradBias) override {
         // inicia velocidades se estiverem vazias
         if(velocidadePesos.empty()) {
             velocidadePesos = matrizZeros(pesos.size(), pesos[0].size());
@@ -84,10 +83,9 @@ public:
         : taxa(taxa), eps(eps) {}
     
     void att(vector<vector<float>>& pesos,
-             vector<vector<float>>& gradPesos,
-             vector<float>& bias,
-             vector<float>& gradBias) override {
-                 
+    vector<vector<float>>& gradPesos,
+    vector<float>& bias,
+    vector<float>& gradBias) override {
         // inicia acumuladores se estiverem vazios
         if(somaGradPesos.empty()) {
             somaGradPesos = matrizZeros(pesos.size(), pesos[0].size());
@@ -120,10 +118,9 @@ public:
         : taxa(taxa), decaimento(decaimento), eps(eps) {}
     
     void att(vector<vector<float>>& pesos,
-             vector<vector<float>>& gradPesos,
-             vector<float>& bias,
-             vector<float>& gradBias) override {
-                 
+    vector<vector<float>>& gradPesos,
+    vector<float>& bias,
+    vector<float>& gradBias) override {
         // inicia acumuladores se estiverem vazios
         if(somaPesos.empty()) {
             somaPesos = matrizZeros(pesos.size(), pesos[0].size());
@@ -160,10 +157,9 @@ public:
         : rho(rho), eps(eps) {}
     
     void att(vector<vector<float>>& pesos,
-             vector<vector<float>>& gradPesos,
-             vector<float>& bias,
-             vector<float>& gradBias) override {
-                 
+    vector<vector<float>>& gradPesos,
+    vector<float>& bias,
+    vector<float>& gradBias) override {
         // inicia acumuladores se estiverem vazios
         if(acumGradPesos.empty()) {
             acumGradPesos = matrizZeros(pesos.size(), pesos[0].size());
@@ -216,10 +212,9 @@ public:
         : taxa(taxa), momentum(momentum) {}
     
     void att(vector<vector<float>>& pesos,
-             vector<vector<float>>& gradPesos,
-             vector<float>& bias,
-             vector<float>& gradBias) override {
-        
+    vector<vector<float>>& gradPesos,
+    vector<float>& bias,
+    vector<float>& gradBias) override {
         // inicia velocidades se estiverem vazias
         if(velocidadePesos.empty()) {
             velocidadePesos = matrizZeros(pesos.size(), pesos[0].size());
@@ -251,7 +246,6 @@ public:
         }
     }
 };
-
 // adam com decaimento de peso correto
 class AdamW : public Adam {
 public:
@@ -261,9 +255,9 @@ public:
         : Adam(taxa), pesoDecaimento(pesoDecaimento) {}
     
     void att(vector<vector<float>>& pesos,
-             vector<vector<float>>& gradPesos,
-             vector<float>& bias,
-             vector<float>& gradBias) override {
+    vector<vector<float>>& gradPesos,
+    vector<float>& bias,
+    vector<float>& gradBias) override {
         t++;
         
         // inicia cache se vazio
