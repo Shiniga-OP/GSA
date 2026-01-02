@@ -408,7 +408,7 @@ public:
     
     Modelo(const string& nome = "") : nome(nome), treinando(true) {}
     
-    void adicionar(unique_ptr<Camada> camada) {
+    void add(unique_ptr<Camada> camada) {
         camadas.push_back(std::move(camada));
     }
     

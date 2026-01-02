@@ -158,9 +158,9 @@ int main() {
     {
         cout << "\n1. SEM DROPOUT:" << endl;
         Modelo sem("sem_dropout");
-        sem.adicionar(make_unique<Densa>(n_recursos, 10, "relu", true));
-        sem.adicionar(make_unique<Densa>(10, 10, "relu", true));
-        sem.adicionar(make_unique<Densa>(10, 1, "sigmoid", true));
+        sem.add(make_unique<Densa>(n_recursos, 10, "relu", true));
+        sem.add(make_unique<Densa>(10, 10, "relu", true));
+        sem.add(make_unique<Densa>(10, 1, "sigmoid", true));
         
         // treino
         float melhor_teste = 1.0f;
@@ -200,11 +200,11 @@ int main() {
     {
         cout << "\n2. COM DROPOUT (30%):" << endl;
         Modelo com("com_dropout");
-        com.adicionar(make_unique<Densa>(n_recursos, 10, "relu", true));
-        com.adicionar(make_unique<Dropout>(0.3f));
-        com.adicionar(make_unique<Densa>(10, 10, "relu", true));
-        com.adicionar(make_unique<Dropout>(0.3f));
-        com.adicionar(make_unique<Densa>(10, 1, "sigmoid", true));
+        com.add(make_unique<Densa>(n_recursos, 10, "relu", true));
+        com.add(make_unique<Dropout>(0.3f));
+        com.add(make_unique<Densa>(10, 10, "relu", true));
+        com.add(make_unique<Dropout>(0.3f));
+        com.add(make_unique<Densa>(10, 1, "sigmoid", true));
         
         // Treino
         float melhor_teste = 1.0f;
