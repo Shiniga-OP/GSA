@@ -137,14 +137,11 @@ void testeCD2() {
     assert(fabs(soma - 1.0f) < 1e-4);
 }
 
-void testeCD() {
+int main() {
     cout << fixed << setprecision(4);
     testeCD1();
     testeCD2();
     cout << "\n=== FIM CAMADA DENSA ===\n";
-}
-
-int main() {
-    testeCD();
+    testeU();
     return 0;
 }

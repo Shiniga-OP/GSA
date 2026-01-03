@@ -4,8 +4,8 @@ em desenvolvimento com a biblioteca própria.
 ## conteúdo:
 1. ativações: degrau, sigmoid, tanh, ReLU, GELU, e etc, + deverivadas.
 2. tokenizadores: tokenzador sub palavra.
-3. utilitários: pesos, atualização de pesos, perda, erro, saída, métricas, matrizes 2D/3D + vetores.
-4. camadas: camada densa, camada dropout.
+3. utilitários: pesos, atualização de pesos, perda, erro, saída, métricas, matrizes 2D/3D + vetores, criador de arquivo de imagem básicos em 24 bit BMP, impressores de imagem em caracteres de terminal.
+4. camadas: camada densa, camada dropout, camada de normalização em lote (ainda em testes).
 5. otimizadores: Adam, AdamW, SGD, AdaGrad, RMSprop, AdaDelta, Nesterov.
 
 implementação feita do zero, sem bibliotecas de IA prontas (escrita no Android via Termux e CodeEditor).
@@ -14,6 +14,8 @@ implementação feita do zero, sem bibliotecas de IA prontas (escrita no Android
 
 * teste_xor.cpp: testa o aprendizado não linear e treinamento por lote da camada densa.
 * teste_dropout.cpp: testa a prevenção de overfit com dropout e modelo multi camadas.
+* teste_lotenorm.cpp: testa a capacidade de normalização da camada em um teste XOR.
+* gerador_pixelart.cpp: um gerador de pixel arts 8x8 pixels para testar as capacidades básicas das camadas com modelos.
 * teste.cpp:
 ```Cpp
 // teste.cpp

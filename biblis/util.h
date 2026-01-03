@@ -197,7 +197,10 @@ float f1Ponto(const vector<vector<int>>& confusao) {
 
 float mse(const vector<float>& saida, const vector<float>& esperado) {
     float soma = 0.0f;
-    for(size_t i = 0; i < saida.size(); i++) soma += pow(saida[i] - esperado[i], 2);
+    for(size_t i = 0; i < saida.size(); i++) {
+        float diff = saida[i] - esperado[i];
+        soma += diff * diff;
+    }
     return soma / saida.size();
 }
 
@@ -563,4 +566,72 @@ vector<float> somarVetores(const vector<float>& a, const vector<float>& b) {
         resultado[i] = a[i] + b[i];
     }
     return resultado;
+}
+
+// manipulação de imagens:
+// gravador de arquivo BMP(24-bit)
+void criarBMP24(const vector<float>& pixels, const string& nomeArquivo,
+int largura = 8, int altura = 8) {
+    int preenchimento = (4 - (largura * 3) % 4) % 4;
+    int tamanhoArquivo = 54 + (3 * largura + preenchimento) * altura;
+
+    unsigned char cabecalhoArquivo[14] = {'B','M', 0,0,0,0, 0,0, 0,0, 54,0,0,0};
+    unsigned char cabecalhoInfo[40] = {40,0,0,0, 0,0,0,0, 0,0,0,0, 1,0, 24,0};
+
+    // preenche tamanhos no cabeçalho(little endian)
+    cabecalhoArquivo[2] = (unsigned char)(tamanhoArquivo);
+    cabecalhoArquivo[3] = (unsigned char)(tamanhoArquivo >> 8);
+    cabecalhoArquivo[4] = (unsigned char)(tamanhoArquivo >> 16);
+    cabecalhoArquivo[5] = (unsigned char)(tamanhoArquivo >> 24);
+    
+    cabecalhoInfo[4] = (unsigned char)(largura);
+    cabecalhoInfo[5] = (unsigned char)(largura >> 8);
+    cabecalhoInfo[6] = (unsigned char)(largura >> 16);
+    cabecalhoInfo[7] = (unsigned char)(largura >> 8);
+    cabecalhoInfo[8] = (unsigned char)(altura);
+    cabecalhoInfo[9] = (unsigned char)(altura >> 8);
+    cabecalhoInfo[10] = (unsigned char)(altura >> 16);
+    cabecalhoInfo[11] = (unsigned char)(altura >> 24);
+
+    ofstream arq(nomeArquivo, ios::out | ios::binary);
+    arq.write((char*)cabecalhoArquivo, 14);
+    arq.write((char*)cabecalhoInfo, 40);
+
+    unsigned char bmppad[3] = {0,0,0};
+
+    // BMP grava de baixo pra cima
+    for(int i = altura - 1; i >= 0; i--) {
+        for(int j = 0; j < largura; j++) {
+            float p = pixels[i * largura + j];
+            
+            if(p < 0) p = 0;
+            if(p > 1) p = 1;
+            
+            unsigned char cinza = (unsigned char)(p * 255);
+            arq.put(cinza); // azul
+            arq.put(cinza); // verde
+            arq.put(cinza); // vermelho
+        }
+        arq.write((char*)bmppad, preenchimento);
+    }
+    arq.close();
+}
+
+// terminal
+void gravarImg(const vector<float>& pixels) {
+    string caracteres = " .:-=+*#%@"; 
+    cout << "+--------+" << endl;
+    for(int i = 0; i < 8; ++i) {
+        cout << "|";
+        for(int j = 0; j < 8; ++j) {
+            float p = pixels[i * 8 + j];
+            
+            if(p < 0) p = 0;
+            if(p > 1) p = 1;
+            
+            cout << caracteres[static_cast<int>(p * 9)];
+        }
+        cout << "|" << endl;
+    }
+    cout << "+--------+" << endl;
 }
