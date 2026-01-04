@@ -1,10 +1,9 @@
-// teste_lotenorm_corrigido.cpp
+// teste_lotenorm.cpp
 #include "biblis/camadas.h"
 #include <iostream>
 #include <vector>
 #include <iomanip>
 #include <random>
-#include <cmath>
 #include <algorithm>
 
 using namespace std;
@@ -16,8 +15,7 @@ normal_distribution<float> dist_normal(0.0f, 0.5f);
 
 // gera dados de XOR com ruido
 vector<vector<float>> gerarDadosXOR(int amostras_por_classe = 100) {
-    vector<vector<float>> dados;
-    
+vector<vector<float>> dados;
     // classe 0: (0,0) e (1,1) com ruido
     for(int i = 0; i < amostras_por_classe; i++) {
         float ruido_x = dist_normal(rng) * 0.1f;

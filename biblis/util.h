@@ -12,8 +12,8 @@ using namespace std;
 
 // funções de pesos
 vector<vector<float>> iniPesosXavier(int l, int c) {
-    random_device rd;
-    mt19937 gen(rd());
+    random_device al;
+    mt19937 gen(al());
     uniform_real_distribution<float> dis(-1.0f, 1.0f);
     
     float limite = sqrt(6.0f / (l + c));
@@ -26,8 +26,8 @@ vector<vector<float>> iniPesosXavier(int l, int c) {
 }
 
 vector<vector<float>> iniPesosHe(int l, int c) {
-    random_device rd;
-    mt19937 gen(rd());
+    random_device al;
+    mt19937 gen(al());
     uniform_real_distribution<float> dis(-1.0f, 1.0f);
     
     float limite = sqrt(2.0f / l);
@@ -63,7 +63,9 @@ vector<vector<float>> attPesosMomentum(const vector<vector<float>>& pesos, const
     return nova;
 }
 
-vector<vector<float>> attPesosAdam(const vector<vector<float>>& pesos, const vector<vector<float>>& grad, vector<vector<float>>& m, vector<vector<float>>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, int iteracao = 1, float lambda = 0.001f) {
+vector<vector<float>> attPesosAdam(const vector<vector<float>>& pesos, const vector<vector<float>>& grad,
+vector<vector<float>>& m, vector<vector<float>>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f,
+float eps = 1e-8f, int iteracao = 1, float lambda = 0.001f) {
     vector<vector<float>> nova(pesos.size(), vector<float>(pesos[0].size()));
     
     float fator1 = 1.0f - pow(beta1, iteracao);
@@ -84,7 +86,9 @@ vector<vector<float>> attPesosAdam(const vector<vector<float>>& pesos, const vec
     return nova;
 }
 
-vector<float> attPesosAdam1D(vector<float>& p, const vector<float>& grad, vector<float>& m, vector<float>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, int t = 1, float lambda = 0.001f) {
+vector<float> attPesosAdam1D(vector<float>& p, const vector<float>& grad,
+vector<float>& m, vector<float>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f,
+float eps = 1e-8f, int t = 1, float lambda = 0.001f) {
     float umMenosBeta1 = 1.0f - beta1;
     float umMenosBeta2 = 1.0f - beta2;
     float fator1 = 1.0f - pow(beta1, t);
@@ -123,8 +127,8 @@ vector<vector<float>> regularL2(const vector<vector<float>>& pesos, float lambda
 }
 
 vector<vector<float>> dropout(vector<vector<float>> tensor, float taxa) {
-    random_device rd;
-    mt19937 gen(rd());
+    random_device al;
+    mt19937 gen(al());
     uniform_real_distribution<float> dis(0.0f, 1.0f);
     
     for(auto& linha : tensor) {
@@ -162,7 +166,7 @@ vector<float> normZPonto(const vector<float>& v) {
     return res;
 }
 
-// funções de metricas
+// funções de metricas:
 float acuracia(const vector<vector<float>>& saida, const vector<vector<float>>& esperado) {
     int corretos = 0;
     for(size_t i = 0; i < saida.size(); i++) {
@@ -361,11 +365,89 @@ vector<float> addRuido(const vector<float>& v, float intenso = 0.01f) {
     for(size_t i = 0; i < v.size(); ++i) res[i] = v[i] + dis(gen);
     return res;
 }
+// funções tensores 4D
+vector<vector<vector<vector<float>>>> zeros4D(size_t d1, size_t d2, size_t d3, size_t d4) {
+    vector<vector<vector<vector<float>>>> tensor(d1);
+    for(size_t i = 0; i < d1; i++) {
+        tensor[i].resize(d2);
+        for(size_t j = 0; j < d2; j++) {
+            tensor[i][j].resize(d3);
+            for(size_t k = 0; k < d3; k++) {
+                tensor[i][j][k].resize(d4, 0.0f);
+            }
+        }
+    }
+    return tensor;
+}
 
+vector<vector<vector<vector<float>>>> tensor4D(int d1, int d2, int d3, int d4, float escala = 0.1f) {
+    random_device al;
+    mt19937 gen(al());
+    uniform_real_distribution<float> dis(-escala, escala);
+    
+    vector<vector<vector<vector<float>>>> tensor(d1);
+    for(int i = 0; i < d1; i++) {
+        tensor[i].resize(d2);
+        for(int j = 0; j < d2; j++) {
+            tensor[i][j].resize(d3);
+            for(int k = 0; k < d3; k++) {
+                tensor[i][j][k].resize(d4);
+                for(int l = 0; l < d4; l++) {
+                    tensor[i][j][k][l] = dis(gen);
+                }
+            }
+        }
+    }
+    return tensor;
+}
+// converte tensor 4D em 2D
+vector<vector<float>> cvt4Dpra2D(const vector<vector<vector<vector<float>>>>& tensor4D) {
+    size_t total = 0;
+    for(const auto& d1 : tensor4D) {
+        for(const auto& d2 : d1) {
+            for(const auto& d3 : d2) {
+                total += d3.size();
+            }
+        }
+    }
+    vector<vector<float>> res(1, vector<float>(total));
+    size_t idc = 0;
+    
+    for(const auto& d1 : tensor4D) {
+        for(const auto& d2 : d1) {
+            for(const auto& d3 : d2) {
+                for(float val : d3) {
+                    res[0][idc++] = val;
+                }
+            }
+        }
+    }
+    return res;
+}
+// converte tensor 2D em 4D
+vector<vector<vector<vector<float>>>> cvt2Dpra4D(const vector<vector<float>>& tensor2D, 
+size_t d1, size_t d2, size_t d3, size_t d4) {
+    vector<vector<vector<vector<float>>>> tensor(d1);
+    size_t idc = 0;
+    
+    for(size_t i = 0; i < d1; i++) {
+        tensor[i].resize(d2);
+        for(size_t j = 0; j < d2; j++) {
+            tensor[i][j].resize(d3);
+            for(size_t k = 0; k < d3; k++) {
+                tensor[i][j][k].resize(d4);
+                for(size_t l = 0; l < d4; l++) {
+                    tensor[i][j][k][l] = tensor2D[0][idc++];
+                }
+            }
+        }
+    }
+    return tensor;
+}
 // funções tensores 3D
 vector<vector<vector<float>>> tensor3D(int p, int l, int c, float escala = 0.1f) {
-    random_device rd;
-    mt19937 gen(rd());
+    random_device al;
+    mt19937 gen(al());
     uniform_real_distribution<float> dis(-escala, escala);
 
     vector<vector<vector<float>>> t(p, vector<vector<float>>(l, vector<float>(c)));
@@ -431,18 +513,18 @@ vector<vector<float>> somarVetorMatriz(const vector<vector<float>>& m, const vec
     if(m.size() != v.size()) {
         throw invalid_argument("Dimensões incompatíveis em somarVetorMatriz");
     }
-    vector<vector<float>> resultado = m;
+    vector<vector<float>> res = m;
     for(size_t i = 0; i < m.size(); ++i) {
         for(size_t j = 0; j < m[i].size(); ++j) {
-            resultado[i][j] += v[i];
+            res[i][j] += v[i];
         }
     }
-    return resultado;
+    return res;
 }
 // funções matriz 2D
 vector<vector<float>> matriz(int l, int c, float escala = 0.1f) {
-    random_device rd;
-    mt19937 gen(rd());
+    random_device al;
+    mt19937 gen(al());
     uniform_real_distribution<float> dis(-escala, escala);
 
     vector<vector<float>> m(l, vector<float>(c));
@@ -541,8 +623,8 @@ vector<float> multMatrizVetor(const vector<vector<float>>& m, const vector<float
 }
 // vetores:
 vector<float> vetor(int c, float escala = 0.1f) {
-    random_device rd;
-    mt19937 gen(rd());
+    random_device al;
+    mt19937 gen(al());
     uniform_real_distribution<float> dis(-escala, escala);
     vector<float> v(c);
     for(int i = 0; i < c; ++i) v[i] = dis(gen);
@@ -558,14 +640,14 @@ vector<float> zeros(int n) {
     return vector<float>(n, 0.0f);
 }
 vector<float> somarVetores(const vector<float>& a, const vector<float>& b) {
-    if (a.size() != b.size()) {
+    if(a.size() != b.size()) {
         throw invalid_argument("Vetores com dimensões incompatíveis para soma.");
     }
-    vector<float> resultado(a.size());
-    for (size_t i = 0; i < a.size(); ++i) {
-        resultado[i] = a[i] + b[i];
+    vector<float> res(a.size());
+    for(size_t i = 0; i < a.size(); ++i) {
+        res[i] = a[i] + b[i];
     }
-    return resultado;
+    return res;
 }
 
 // manipulação de imagens:
@@ -616,9 +698,8 @@ int largura = 8, int altura = 8) {
     }
     arq.close();
 }
-
 // terminal
-void gravarImg(const vector<float>& pixels) {
+void gravarImg1D(const vector<float>& pixels) {
     string caracteres = " .:-=+*#%@"; 
     cout << "+--------+" << endl;
     for(int i = 0; i < 8; ++i) {
@@ -634,4 +715,16 @@ void gravarImg(const vector<float>& pixels) {
         cout << "|" << endl;
     }
     cout << "+--------+" << endl;
+}
+void gravarImg2D(const vector<vector<float>>& img) {
+    for(const auto& linha : img) {
+        for(float pixel : linha) {
+            if(pixel > 0.8f) cout << "██";
+            else if(pixel > 0.6f) cout << "▓▓";
+            else if(pixel > 0.4f) cout << "▒▒";
+            else if(pixel > 0.2f) cout << "░░";
+            else cout << "  ";
+        }
+        cout << endl;
+    }
 }

@@ -28,7 +28,6 @@ int main() {
         cruz[3*8+i]=1.0f;
         cruz[4*8+i]=1.0f;
     }
-    
     vector<float> quadrado(64, 0.0f);
     for(int i=2; i<6; i++) {
         for(int j=2; j<6; j++) {
@@ -79,7 +78,7 @@ int main() {
     cout << "\nResultado em varios estilos:" << endl;
     for(int i=0; i<4; i++) {
         vector<float> img = gerador->prop(vetor(10, 1.0f));
-        gravarImg(img);
+        gravarImg1D(img);
         criarBMP24(img, "imagem_" + to_string(i) + ".bmp");
     }
     return 0;
