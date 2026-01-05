@@ -1623,7 +1623,8 @@ public:
     }
     
     float treinar(const vector<float>& entrada, const vector<float>& alvo, 
-    function<float(const vector<float>&, const vector<float>&)> perda,
+    function<float(const vector<float>&, const vector<float>&)> perda = mse,
+    function<vector<float>(const vector<float>&, const vector<float>&)> derivadaPerda = derivadaMse,
     float taxaAprendizado = 0.01f) {
         // garante que ta no modo treino
         modoTreino();
@@ -1634,11 +1635,9 @@ public:
         // calcula a perda
         float erro = perda(saida, alvo);
         
-        // gradiente inicial(derivada da MSE)
-        vector<float> gradiente(saida.size());
-        for(size_t i = 0; i < saida.size(); i++) {
-            gradiente[i] = 2.0f * (saida[i] - alvo[i]) / saida.size();
-        }
+        // gradiente inicial
+        vector<float> gradiente = derivadaPerda(saida, alvo);
+        
         // repropagação
         for(int i = camadas.size() - 1; i >= 0; i--) {
             gradiente = camadas[i]->retroprop(gradiente);
@@ -1661,7 +1660,8 @@ public:
     // pra CNNs:
     float treinarMapa(const vector<vector<vector<float>>>& entrada3D, 
     const vector<float>& alvo,
-    function<float(const vector<float>&, const vector<float>&)> perda,
+    function<float(const vector<float>&, const vector<float>&)> perda = mse,
+    function<vector<float>(const vector<float>&, const vector<float>&)> derivadaPerda = derivadaMse,
     float taxaAprendizado = 0.01f) {
         modoTreino();
         zerarGradientes();
@@ -1698,11 +1698,8 @@ public:
         // calcula perda
         float erro = perda(saidaFinal, alvo);
         
-        // calcula gradiente inicial(derivada da MSE)
-        vector<float> gradiente1D(saidaFinal.size());
-        for(size_t i = 0; i < saidaFinal.size(); i++) {
-            gradiente1D[i] = 2.0f * (saidaFinal[i] - alvo[i]) / saidaFinal.size();
-        }
+        // calcula gradiente inicial
+        vector<float> gradiente1D = derivadaPerda(saidaFinal, alvo);
         // converte gradiente 1D pra 3D pra retropropagação
         vector<vector<vector<float>>> gradiente3D(1, vector<vector<float>>(1, gradiente1D));
         

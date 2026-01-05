@@ -1,0 +1,245 @@
+=== Documentação do GSA (util.h) ===
+
+[Função]: attPesos(const vector<vector<float>>& pesos, const vector<vector<float>>& grad, float taxa, float lambda = 1e-3f);
+[Retorno]: vector<vector<float>>
+[Fórmula]: nova[i][j] = pesos[i][j] - taxa * grad[i][j] - lambda * pesos[i][j]
+
+[Função]: attPesosMomentum(const vector<vector<float>>& pesos, const vector<vector<float>>& grad, float taxa, float momento, vector<vector<float>>& velocidade);
+[Retorno]: vector<vector<float>>
+[Fórmula]: velocidade[i][j] = momento * velocidade[i][j] + grad[i][j]
+           nova[i][j] = pesos[i][j] - taxa * velocidade[i][j]
+
+[Função]: attPesosAdam(const vector<vector<float>>& pesos, const vector<vector<float>>& grad, vector<vector<float>>& m, vector<vector<float>>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, int iteracao = 1, float lambda = 0.001f);
+[Retorno]: vector<vector<float>>
+[Fórmula]: m[i][j] = beta1 * m[i][j] + (1 - beta1) * g
+           v[i][j] = beta2 * v[i][j] + (1 - beta2) * g²
+           mChapeu = m[i][j] / (1 - beta1^iteracao)
+           vChapeu = v[i][j] / (1 - beta2^iteracao)
+           nova[i][j] = pesos[i][j] - taxa * mChapeu / (√vChapeu + eps)
+
+[Função]: attPesosAdam1D(vector<float>& p, const vector<float>& grad, vector<float>& m, vector<float>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f, float eps = 1e-8f, int t = 1, float lambda = 0.001f);
+[Retorno]: vector<float>
+[Fórmula]: Versão 1D do Adam (mesma fórmula acima)
+
+[Função]: regularL1(const vector<vector<float>>& pesos, float lambda);
+[Retorno]: vector<vector<float>>
+[Fórmula]: res[i][j] = lambda * sign(pesos[i][j])
+
+[Função]: regularL2(const vector<vector<float>>& pesos, float lambda);
+[Retorno]: vector<vector<float>>
+[Fórmula]: res[i][j] = lambda * pesos[i][j]
+
+[Função]: dropout(vector<vector<float>> tensor, float taxa);
+[Retorno]: vector<vector<float>>
+[Fórmula]: valor = 0 (com probabilidade taxa) ou valor/(1-taxa)
+
+[Função]: normEntrada(const vector<float>& vetor);
+[Retorno]: vector<float>
+[Fórmula]: res[i] = (vetor[i] - min) / (max - min)
+
+[Função]: normZPonto(const vector<float>& v);
+[Retorno]: vector<float>
+[Fórmula]: res[i] = (v[i] - média) / desvio_padrão
+
+[Função]: acuracia(const vector<vector<float>>& saida, const vector<vector<float>>& esperado);
+[Retorno]: float
+[Fórmula]: corretos/total
+
+[Função]: precisao(const vector<vector<int>>& confusao);
+[Retorno]: float
+[Fórmula]: TP / (TP + FP)
+
+[Função]: recall(const vector<vector<int>>& confusao);
+[Retorno]: float
+[Fórmula]: TP / (TP + FN)
+
+[Função]: f1Ponto(const vector<vector<int>>& confusao);
+[Retorno]: float
+[Fórmula]: 2 * (precisão * recall) / (precisão + recall)
+
+[Função]: mse(const vector<float>& saida, const vector<float>& esperado);
+[Retorno]: float
+[Fórmula]: Σ(saida[i] - esperado[i])² / n
+
+[Função]: derivadaMse(const vector<float>& saida, const vector<float>& esperado);
+[Retorno]: vector<float>
+[Fórmula]: derivada de (y-ŷ)² = 2*(y-ŷ)
+
+[Função]: klDivergencia(const vector<float>& p, const vector<float>& q);
+[Retorno]: float
+[Fórmula]: Σ p[i] * log(p[i] / q[i])
+
+[Função]: rocAuc(const vector<float>& pontos, const vector<int>& rotulos);
+[Retorno]: float
+[Fórmula]: Área sob a curva ROC
+
+[Função]: erroAbsolutoMedio(const vector<float>& saida, const vector<float>& esperado);
+[Retorno]: float
+[Fórmula]: Σ |saida[i] - esperado[i]| / n
+
+[Função]: erroQuadradoEsperado(const vector<float>& saida, const vector<float>& esperado);
+[Retorno]: float
+[Fórmula]: 0.5 * Σ (saida[i] - esperado[i])²
+
+[Função]: derivadaErro(const vector<float>& saida, const vector<float>& esperado);
+[Retorno]: vector<float>
+[Fórmula]: deriv[i] = saida[i] - esperado[i]
+
+[Função]: entropiaCruzada(const vector<float>& y, const vector<float>& yChapeu);
+[Retorno]: float
+[Fórmula]: -Σ y[i] * log(yChapeu[i])
+
+[Função]: derivadaEntropiaCruzada(const vector<float>& y, const vector<float>& yChapeu);
+[Retorno]: vector<float>
+[Fórmula]: deriv[i] = yChapeu[i] - y[i]
+
+[Função]: huberPerda(const vector<float>& saida, const vector<float>& esperado, float delta = 1.0f);
+[Retorno]: float
+[Fórmula]: Lδ(a) = 0.5a² se |a|≤δ, δ(|a|-0.5δ) caso contrário
+
+[Função]: derivadaHuber(const vector<float>& saida, const vector<float>& esperado, float delta = 1.0f);
+[Retorno]: vector<float>
+[Fórmula]: deriv[i] = diff se |diff|≤δ, δ*sign(diff) caso contrário
+
+[Função]: perdaTripleto(const vector<float>& ancora, const vector<float>& positiva, const vector<float>& negativa, float margem = 1.0f);
+[Retorno]: float
+[Fórmula]: max(0, dist(ancora, positiva) - dist(ancora, negativa) + margem)
+
+[Função]: contrastivaPerda(const vector<float>& saida1, const vector<float>& saida2, int rotulo, float margem = 1.0f);
+[Retorno]: float
+[Fórmula]: dist se rotulo=1, max(0, margem - √dist) se rotulo=0
+
+[Função]: softmax(const vector<float>& arr, float temp = 1.0f);
+[Retorno]: vector<float>
+[Fórmula]: exp(arr[i]/temp) / Σ exp(arr[j]/temp)
+
+[Função]: derivadaSoftmax(const vector<float>& arr, const vector<float>& gradSaida);
+[Retorno]: vector<float>
+[Fórmula]: arr[i] * (gradSaida[i] - Σ arr[j]*gradSaida[j])
+
+[Função]: softmaxLote(const vector<vector<float>>& m, float temp = 1.0f);
+[Retorno]: vector<vector<float>>
+[Fórmula]: Aplica softmax em cada linha da matriz
+
+[Função]: argmax(const vector<float>& v);
+[Retorno]: int
+[Fórmula]: índice do maior elemento
+
+[Função]: addRuido(const vector<float>& v, float intenso = 0.01f);
+[Retorno]: vector<float>
+[Fórmula]: res[i] = v[i] + U(-intenso, intenso)
+
+[Função]: zeros4D(size_t d1, size_t d2, size_t d3, size_t d4);
+[Retorno]: tensor4D de zeros
+
+[Função]: tensor4D(int d1, int d2, int d3, int d4, float escala = 0.1f);
+[Retorno]: tensor4D com valores aleatórios U(-escala, escala)
+
+[Função]: cvt4Dpra2D(const vector<vector<vector<vector<float>>>>& tensor4D);
+[Retorno]: vector<vector<float>>
+[Fórmula]: Achata tensor 4D para matriz 2D (1xN)
+
+[Função]: cvt2Dpra4D(const vector<vector<float>>& tensor2D, size_t d1, size_t d2, size_t d3, size_t d4);
+[Retorno]: tensor4D
+[Fórmula]: Converte matriz 2D para tensor 4D com dimensões dadas
+
+[Função]: tensor3D(int p, int l, int c, float escala = 0.1f);
+[Retorno]: tensor3D com valores aleatórios
+
+[Função]: zeros3D(int p, int l, int c);
+[Retorno]: tensor3D de zeros
+
+[Função]: mapear3D(const vector<vector<vector<float>>>& t, function<float(float)> fn);
+[Retorno]: tensor3D
+[Fórmula]: Aplica função fn a cada elemento
+
+[Função]: somar3D(const vector<vector<vector<float>>>& a, const vector<vector<vector<float>>>& b);
+[Retorno]: tensor3D
+[Fórmula]: Element-wise soma
+
+[Função]: mult3DporEscalar(const vector<vector<vector<float>>>& t, float escalar);
+[Retorno]: tensor3D
+[Fórmula]: Multiplica cada elemento por escalar
+
+[Função]: aplicarMatrizLote(const vector<vector<float>>& m, const vector<vector<float>>& v);
+[Retorno]: vector<vector<float>>
+[Fórmula]: res[i][j] = Σ m[j][k] * v[i][k]
+
+[Função]: somarVetorMatriz(const vector<vector<float>>& m, const vector<float>& v);
+[Retorno]: vector<vector<float>>
+[Fórmula]: m[i][j] + v[i]
+
+[Função]: matriz(int l, int c, float escala = 0.1f);
+[Retorno]: matriz lxc com valores aleatórios
+
+[Função]: matrizZeros(size_t linhas, size_t colunas);
+[Retorno]: matriz de zeros
+
+[Função]: exterior(const vector<float>& a, const vector<float>& b);
+[Retorno]: matriz
+[Fórmula]: res[i][j] = a[i] * b[j]
+
+[Função]: somarMatriz(const vector<vector<float>>& a, const vector<vector<float>>& b);
+[Retorno]: matriz
+[Fórmula]: Element-wise soma
+
+[Função]: subMatriz(const vector<vector<float>>& a, const vector<vector<float>>& b);
+[Retorno]: matriz
+[Fórmula]: Element-wise subtração
+
+[Função]: multMatriz(const vector<vector<float>>& m, float s);
+[Retorno]: matriz
+[Fórmula]: Multiplica cada elemento por s
+
+[Função]: multMatrizes(const vector<vector<float>>& a, const vector<vector<float>>& b);
+[Retorno]: matriz
+[Fórmula]: Multiplicação matricial padrão
+
+[Função]: aplicarMatriz(const vector<vector<float>>& m, const vector<float>& v);
+[Retorno]: vetor
+[Fórmula]: y = Mx
+
+[Função]: transpor(const vector<vector<float>>& m);
+[Retorno]: matriz
+[Fórmula]: Mᵀ
+
+[Função]: identidade(int n);
+[Retorno]: matriz identidade nxn
+
+[Função]: matrizVetor(const vector<vector<float>>& m, const vector<float>& v);
+[Retorno]: vetor
+[Fórmula]: y = Mx
+
+[Função]: multVetorMatriz(const vector<float>& v, const vector<float>& c);
+[Retorno]: vetor
+[Fórmula]: Element-wise multiplicação
+
+[Função]: multMatrizVetor(const vector<vector<float>>& m, const vector<float>& v);
+[Retorno]: vetor
+[Fórmula]: y = Mx
+
+[Função]: vetor(int c, float escala = 0.1f);
+[Retorno]: vetor com valores aleatórios
+
+[Função]: escalarDot(const vector<float>& a, const vector<float>& b);
+[Retorno]: float
+[Fórmula]: Σ a[i] * b[i]
+
+[Função]: zeros(int n);
+[Retorno]: vetor de zeros
+
+[Função]: somarVetores(const vector<float>& a, const vector<float>& b);
+[Retorno]: vetor
+[Fórmula]: Element-wise soma
+
+[Função]: criarBMP24(const vector<float>& pixels, const string& nomeArquivo, int largura = 8, int altura = 8);
+[Retorno]: void
+[Descrição]: Cria arquivo BMP em escala de cinza
+
+[Função]: gravarImg1D(const vector<float>& pixels);
+[Retorno]: void
+[Descrição]: Exibe imagem 8x8 no terminal
+
+[Função]: gravarImg2D(const vector<vector<float>>& img);
+[Retorno]: void
+[Descrição]: Exibe imagem 2D no terminal com caracteres unicode

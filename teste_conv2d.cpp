@@ -185,17 +185,9 @@ void testeCNN() {
     // agora tenta o treino se as dimensões tiverem corretas
     cout << "\n=== Teste Treino (uma epoca) ===" << endl;
     
-    auto perdaMSE = [](const vector<float>& saida, const vector<float>& alvo) {
-        float soma = 0.0f;
-        for(size_t i = 0; i < saida.size(); i++) {
-            float diff = saida[i] - alvo[i];
-            soma += diff * diff;
-        }
-        return soma / saida.size();
-    };
     try {
         // treina:
-        float erro = cnn.treinarMapa(imagem, alvo, perdaMSE, 0.01f);
+        float erro = cnn.treinarMapa(imagem, alvo);
         cout << "Erro após treino: " << erro << endl;
     } catch(const exception& e) {
         cerr << "Erro durante treino: " << e.what() << endl;

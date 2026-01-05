@@ -1,0 +1,118 @@
+=== Documentação do GSA (ativas.h) ===
+
+[Função]: sigmoid(float x);
+[Retorno]: float
+[Fórmula]: 1 / (1 + exp(-x))
+
+[Função]: derivadaSigmoid(float y);
+[Retorno]: float
+[Fórmula]: y * (1 - y)
+
+[Função]: hardSigmoid(float x);
+[Retorno]: float
+[Fórmula]: max(0, min(1, 0.2x + 0.5))
+
+[Função]: derivadaHardSigmoid(float y);
+[Retorno]: float
+[Fórmula]: 0.2 se -2.5 < y < 2.5, 0 caso contrário
+
+[Função]: tanhF(float x);
+[Retorno]: float
+[Fórmula]: tanh(x)
+
+[Função]: derivadaTanh(float y);
+[Retorno]: float
+[Fórmula]: 1 - y²
+
+[Função]: ReLU(float x);
+[Retorno]: float
+[Fórmula]: max(0, x)
+
+[Função]: leakyReLU(float x);
+[Retorno]: float
+[Fórmula]: x se x > 0, 0.01x caso contrário
+
+[Função]: derivadaLeakyReLU(float y);
+[Retorno]: float
+[Fórmula]: 1 se y > 0, 0.01 caso contrário
+
+[Função]: softsign(float x);
+[Retorno]: float
+[Fórmula]: x / (1 + |x|)
+
+[Função]: derivadaSoftsign(float y);
+[Retorno]: float
+[Fórmula]: 1 / (1 + |y|)²
+
+[Função]: softplus(float x);
+[Retorno]: float
+[Fórmula]: log(1 + exp(x))
+
+[Função]: swish(float x);
+[Retorno]: float
+[Fórmula]: x * sigmoid(x)
+
+[Função]: derivadaSwish(float y);
+[Retorno]: float
+[Fórmula]: sigmoid(y) + y * sigmoid(y) * (1 - sigmoid(y))
+
+[Função]: hardSwish(float x);
+[Retorno]: float
+[Fórmula]: x * max(0, min(1, (x + 3) / 6))
+
+[Função]: derivadaHardSwish(float y);
+[Retorno]: float
+[Fórmula]: 0 se y ≤ -3, 1 se y ≥ 3, (y + 3)/6 + y/6 caso contrário
+
+[Função]: GELU(float x);
+[Retorno]: float
+[Fórmula]: 0.5x * (1 + tanh(√(2/π) * (x + 0.044715x³)))
+
+[Função]: derivadaGELU(float x);
+[Retorno]: float
+[Fórmula]: cdf + x * (1 - cdf²) * (0.5√(2/π) * (1 + 3*0.044715x²))
+         onde cdf = 0.5 * (1 + tanh(√(2/π) * (x + 0.044715x³)))
+
+[Função]: ELU(float x, float alfa = 1.0);
+[Retorno]: float
+[Fórmula]: x se x ≥ 0, alfa(exp(x) - 1) caso contrário
+
+[Função]: derivadaELU(float y, float alfa = 1.0);
+[Retorno]: float
+[Fórmula]: 1 se y ≥ 0, ELU(y, alfa) + alfa caso contrário
+
+[Função]: SELU(float x, float alfa = 1.67326, float escala = 1.0507);
+[Retorno]: float
+[Fórmula]: escala * ELU(x, alfa)
+
+[Função]: derivadaSELU(float y, float alfa = 1.67326, float escala = 1.0507);
+[Retorno]: float
+[Fórmula]: escala * (1 se y ≥ 0, alfa * exp(y) caso contrário)
+
+[Função]: SiLU(float x);
+[Retorno]: float
+[Fórmula]: x * sigmoid(x) (mesma que swish)
+
+[Função]: mish(float x);
+[Retorno]: float
+[Fórmula]: x * tanh(log(1 + exp(x)))
+
+[Função]: derivadaMish(float y);
+[Retorno]: float
+[Fórmula]: (exp(y) * (4(y+1) + 4exp(2y) + exp(3y) + exp(y)(4y+6))) / (2exp(y) + exp(2y) + 2)²
+
+[Função]: bentIdentity(float x);
+[Retorno]: float
+[Fórmula]: (√(x² + 1) - 1)/2 + x
+
+[Função]: derivadaBentIdentity(float y);
+[Retorno]: float
+[Fórmula]: y/(2√(y² + 1)) + 1
+
+[Função]: gaussian(float x);
+[Retorno]: float
+[Fórmula]: exp(-x²)
+
+[Função]: derivadaGaussian(float y);
+[Retorno]: float
+[Fórmula]: -2y * exp(-y²)

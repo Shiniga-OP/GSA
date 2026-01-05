@@ -14,13 +14,17 @@ using namespace std;
 vector<vector<float>> iniPesosXavier(int l, int c) {
     random_device al;
     mt19937 gen(al());
-    uniform_real_distribution<float> dis(-1.0f, 1.0f);
     
+    // distribuição normal
     float limite = sqrt(6.0f / (l + c));
+    normal_distribution<float> dis(0.0f, 1.0f); // media 0, std dev 1
+    
     vector<vector<float>> pesos(l, vector<float>(c));
     
     for(int i = 0; i < l; ++i) {
-        for(int j = 0; j < c; ++j) pesos[i][j] = dis(gen) * limite;
+        for(int j = 0; j < c; ++j) {
+            pesos[i][j] = dis(gen) * limite;
+        }
     }
     return pesos;
 }
@@ -28,17 +32,19 @@ vector<vector<float>> iniPesosXavier(int l, int c) {
 vector<vector<float>> iniPesosHe(int l, int c) {
     random_device al;
     mt19937 gen(al());
-    uniform_real_distribution<float> dis(-1.0f, 1.0f);
+
+    float stddev = sqrt(2.0f / l);
+    normal_distribution<float> dis(0.0f, 1.0f);
     
-    float limite = sqrt(2.0f / l);
     vector<vector<float>> pesos(l, vector<float>(c));
     
     for(int i = 0; i < l; ++i) {
-        for(int j = 0; j < c; ++j) pesos[i][j] = dis(gen) * limite;
+        for(int j = 0; j < c; ++j) {
+            pesos[i][j] = dis(gen) * stddev;
+        }
     }
     return pesos;
 }
-
 // att de pesos
 vector<vector<float>> attPesos(const vector<vector<float>>& pesos, const vector<vector<float>>& grad, float taxa, float lambda = 1e-3f) {
     vector<vector<float>> nova(pesos.size(), vector<float>(pesos[0].size()));
@@ -165,8 +171,7 @@ vector<float> normZPonto(const vector<float>& v) {
     for(float x : v) res.push_back((x - media) / desvio);
     return res;
 }
-
-// funções de metricas:
+// funções de erro:
 float acuracia(const vector<vector<float>>& saida, const vector<vector<float>>& esperado) {
     int corretos = 0;
     for(size_t i = 0; i < saida.size(); i++) {
@@ -223,7 +228,6 @@ float rocAuc(const vector<float>& pontos, const vector<int>& rotulos) {
         [](const auto& a, const auto& b) {
             return a.first > b.first;
     });
-    
     float auc = 0.0f;
     int fp = 0, tp = 0, fpPrev = 0, tpPrev = 0;
     
@@ -238,7 +242,13 @@ float rocAuc(const vector<float>& pontos, const vector<int>& rotulos) {
     return auc / (tp * fp);
 }
 
-// funções de erro:
+vector<float> derivadaMse(const vector<float>& saida, const vector<float>& esperado) {
+    vector<float> deriv(saida.size());
+    for(size_t i = 0; i < saida.size(); i++) {
+        deriv[i] = 2.0f * (saida[i] - esperado[i]); // derivada de (y-ŷ)² = 2*(y-ŷ)
+    }
+    return deriv;
+}
 float erroAbsolutoMedio(const vector<float>& saida, const vector<float>& esperado) {
     float soma = 0.0f;
     for(size_t i = 0; i < saida.size(); i++) soma += abs(saida[i] - esperado[i]);

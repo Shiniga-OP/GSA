@@ -168,7 +168,7 @@ int main() {
             float perda_treino = 0.0f;
             
             for(int i = 0; i < n_treino; i++) {
-                perda_treino += sem.treinar(X[i], y[i], mse, 0.01f);
+                perda_treino += sem.treinar(X[i], y[i]);
             }
             perda_treino /= n_treino;
             
@@ -212,7 +212,7 @@ int main() {
             float perda_treino = 0.0f;
             
             for(int i = 0; i < n_treino; i++) {
-                perda_treino += com.treinar(X[i], y[i], mse, 0.01f);
+                perda_treino += com.treinar(X[i], y[i]);
             }
             perda_treino /= n_treino;
             
@@ -231,7 +231,7 @@ int main() {
             }
             if(epoca % 20 == 0) {
                 cout << "   Epoca " << epoca << ": treino=" << perda_treino 
-                     << ", teste=" << perda_teste << endl;
+                << ", teste=" << perda_teste << endl;
             }
         }
         cout << "   Melhor teste: " << melhor_teste << endl;

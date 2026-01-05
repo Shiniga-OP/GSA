@@ -10,8 +10,46 @@ em desenvolvimento com a biblioteca própria.
 
 implementação feita do zero, sem bibliotecas de IA prontas (escrita no Android via Termux e CodeEditor).
 
-## arquivos:
+## flexibilidade:
+feita para o máximo reuso de recursos em diferentes cenários.
 
+como neste exemplo de modelo:
+```Cpp
+Modelo m("nome_modelo");
+m.add(make_unique<Densa>(
+    10, // dimensão da entrada
+    10, // dimensão de saída
+    "relu", // ativação ("linear" por padrão)
+    true, // se usa bias (true por padrão)
+    "nome" // opcional pra debug
+));
+// definição do otimizador:
+m.camadas[0].defOtimizador(make_unique<Adam>(0.01f)); // 0.01f de taxa
+
+// treinamento:
+vector<float> entrada = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+vector<float> esperado = {2.0f, 4.0f, 6.0f, 8.0f, 10.0f};
+
+float erro = m.treinar(
+    entrada, esperado,
+    mse, // função de perda (MSE padrão)
+    derivadaMse, // derivada da perda (derivada de MSE por padrão)
+    0.01f // taxa de aprendizado (0.01f por padrão)
+);
+
+vector<float> saída = m.prop(entrada); // propaga e retorna a saída
+```
+
+## documentação:
+você pode ver a documentação resumida dos arquivos .h em "doc" no formato:
+
+```Txt
+[Função]: nome();
+[Retorno]: void
+[Fórmula]: matematica da função
+```
+
+## arquivos:
 * teste_xor.cpp: testa o aprendizado não linear e treinamento por lote da camada densa.
 * teste_dropout.cpp: testa a prevenção de overfit com dropout e modelo multi camadas.
 * teste_lotenorm.cpp: testa a capacidade de normalização da camada em um teste XOR.
