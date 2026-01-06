@@ -148,7 +148,7 @@ public:
         // cache da entrada
         entradaCache = entrada;
         
-        // calcular z = Px + b
+        // calcula z = Px + b
         vector<float> z = aplicarMatriz(pesos, entrada);
         
         if(usarBias) {
@@ -158,16 +158,17 @@ public:
         vector<float> saida(z.size());
         if(tipoAtivacao == "softmax") {
             saida = softmax(z);
+            // armazena tanto os logits(z) quanto a saida softmax
+            ativacaoCache = saida; // armazena a saida softmax
         } else if(ativacao) {
             for(size_t i = 0; i < z.size(); i++) {
                 saida[i] = ativacao(z[i]);
             }
+            ativacaoCache = saida; // armazena a ativação pra outras funções
         } else {
             saida = z; // linear
+            ativacaoCache = saida;
         }
-        // cache da ativação(ou z se for softmax)
-        ativacaoCache = saida;
-        
         return saida;
     }
     
@@ -185,15 +186,21 @@ public:
         if(gradiente.size() != saidaDim) {
             throw invalid_argument("[" + nome + "]: Dimensão do gradiente incorreta");
         }
-        // gradiente em relação a ativação
+        
         vector<float> gradAtivacao = gradiente;
         
-        // se houver ativação(exceto softmax), aplica derivada
-        if(tipoAtivacao != "softmax" && tipoAtivacao != "linear" && derivadaAtivacao) {
+        if(tipoAtivacao == "softmax") {
+            // ativacaoCache = saida do softmax e gradiente
+            gradAtivacao = derivadaSoftmax(ativacaoCache, gradiente);
+            
+        } else if(tipoAtivacao != "linear" && derivadaAtivacao) {
+            // outras ativações aplica derivada normalmente
             for(size_t i = 0; i < gradAtivacao.size(); i++) {
                 gradAtivacao[i] *= derivadaAtivacao(ativacaoCache[i]);
             }
         }
+        // pra "linear", não faz nada(derivada = 1)
+        
         // calcula gradientes dos pesos: dP = grad * entrada^T
         for(size_t i = 0; i < saidaDim; i++) {
             for(size_t j = 0; j < entradaDim; j++) {
