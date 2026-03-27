@@ -1,6 +1,7 @@
 // biblis/util.h
 #pragma once
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <random>
 #include <functional>
@@ -15,15 +16,15 @@ vector<vector<float>> iniPesosXavier(int l, int c) {
     random_device al;
     mt19937 gen(al());
     
-    // distribuição normal
+    // distribuição uniforme [-limite, +limite] (Xavier correto)
     float limite = sqrt(6.0f / (l + c));
-    normal_distribution<float> dis(0.0f, 1.0f); // media 0, std dev 1
+    uniform_real_distribution<float> dis(-limite, limite);
     
     vector<vector<float>> pesos(l, vector<float>(c));
     
     for(int i = 0; i < l; ++i) {
         for(int j = 0; j < c; ++j) {
-            pesos[i][j] = dis(gen) * limite;
+            pesos[i][j] = dis(gen);
         }
     }
     return pesos;
@@ -33,20 +34,34 @@ vector<vector<float>> iniPesosHe(int l, int c) {
     random_device al;
     mt19937 gen(al());
 
-    float stddev = sqrt(2.0f / l);
-    normal_distribution<float> dis(0.0f, 1.0f);
+    // FIX: He usa fan_in (c = colunas = entradas), não l (saídas)
+    float stddev = sqrt(2.0f / c);
+    normal_distribution<float> dis(0.0f, stddev);
     
     vector<vector<float>> pesos(l, vector<float>(c));
     
     for(int i = 0; i < l; ++i) {
         for(int j = 0; j < c; ++j) {
-            pesos[i][j] = dis(gen) * stddev;
+            pesos[i][j] = dis(gen);
         }
     }
     return pesos;
 }
-// att de pesos
-vector<vector<float>> attPesos(const vector<vector<float>>& pesos, const vector<vector<float>>& grad, float taxa, float lambda = 1e-3f) {
+
+// att de pesos (SGD puro, sem regularização embutida)
+vector<vector<float>> attPesos(const vector<vector<float>>& pesos, const vector<vector<float>>& grad, float taxa) {
+    vector<vector<float>> nova(pesos.size(), vector<float>(pesos[0].size()));
+    
+    for(size_t i = 0; i < pesos.size(); ++i) {
+        for(size_t j = 0; j < pesos[i].size(); ++j) {
+            nova[i][j] = pesos[i][j] - taxa * grad[i][j];
+        }
+    }
+    return nova;
+}
+
+// att de pesos com L2 explícito (use quando quiser regularização)
+vector<vector<float>> attPesosL2(const vector<vector<float>>& pesos, const vector<vector<float>>& grad, float taxa, float lambda) {
     vector<vector<float>> nova(pesos.size(), vector<float>(pesos[0].size()));
     
     for(size_t i = 0; i < pesos.size(); ++i) {
@@ -69,9 +84,11 @@ vector<vector<float>> attPesosMomentum(const vector<vector<float>>& pesos, const
     return nova;
 }
 
+// FIX: removido lambda oculto — Adam puro não tem L2 embutido
+// AdamW cuida do decaimento de peso por conta própria
 vector<vector<float>> attPesosAdam(const vector<vector<float>>& pesos, const vector<vector<float>>& grad,
 vector<vector<float>>& m, vector<vector<float>>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f,
-float eps = 1e-8f, int iteracao = 1, float lambda = 0.001f) {
+float eps = 1e-8f, int iteracao = 1) {
     vector<vector<float>> nova(pesos.size(), vector<float>(pesos[0].size()));
     
     float fator1 = 1.0f - pow(beta1, iteracao);
@@ -81,7 +98,7 @@ float eps = 1e-8f, int iteracao = 1, float lambda = 0.001f) {
     
     for(size_t i = 0; i < pesos.size(); ++i) {
         for(size_t j = 0; j < pesos[i].size(); ++j) {
-            float g = grad[i][j] + lambda * pesos[i][j];
+            float g = grad[i][j]; // gradiente puro, sem L2
             m[i][j] = beta1 * m[i][j] + umMenosBeta1 * g;
             v[i][j] = beta2 * v[i][j] + umMenosBeta2 * g * g;
             float mChapeu = m[i][j] / fator1;
@@ -92,16 +109,17 @@ float eps = 1e-8f, int iteracao = 1, float lambda = 0.001f) {
     return nova;
 }
 
+// FIX: removido lambda oculto
 vector<float> attPesosAdam1D(vector<float>& p, const vector<float>& grad,
 vector<float>& m, vector<float>& v, float taxa, float beta1 = 0.9f, float beta2 = 0.999f,
-float eps = 1e-8f, int t = 1, float lambda = 0.001f) {
+float eps = 1e-8f, int t = 1) {
     float umMenosBeta1 = 1.0f - beta1;
     float umMenosBeta2 = 1.0f - beta2;
     float fator1 = 1.0f - pow(beta1, t);
     float fator2 = 1.0f - pow(beta2, t);
     
     for(size_t i = 0; i < p.size(); ++i) {
-        float g = grad[i] + lambda * p[i];
+        float g = grad[i]; // gradiente puro
         m[i] = beta1 * m[i] + umMenosBeta1 * g;
         v[i] = beta2 * v[i] + umMenosBeta2 * g * g;
         float mChapeu = m[i] / fator1;
@@ -220,7 +238,6 @@ float klDivergencia(const vector<float>& p, const vector<float>& q) {
 }
 
 float rocAuc(const vector<float>& pontos, const vector<int>& rotulos) {
-    // cria pares [pontuação, rótulo] e ordenar por pontuação (decrescente)
     vector<pair<float, int>> pares;
     for(size_t i = 0; i < pontos.size(); i++) pares.push_back({pontos[i], rotulos[i]});
     
@@ -245,7 +262,7 @@ float rocAuc(const vector<float>& pontos, const vector<int>& rotulos) {
 vector<float> derivadaMse(const vector<float>& saida, const vector<float>& esperado) {
     vector<float> deriv(saida.size());
     for(size_t i = 0; i < saida.size(); i++) {
-        deriv[i] = 2.0f * (saida[i] - esperado[i]); // derivada de (y-ŷ)² = 2*(y-ŷ)
+        deriv[i] = 2.0f * (saida[i] - esperado[i]) / saida.size();
     }
     return deriv;
 }
@@ -323,19 +340,15 @@ float contrastivaPerda(const vector<float>& saida1, const vector<float>& saida2,
 
 // funções de saida:
 vector<float> softmax(const vector<float>& arr, float temp = 1.0f) {
-    // encontra o maior valor para evitar overflow
     float max = *max_element(arr.begin(), arr.end());
     
-    // calcula exponenciais
     vector<float> exps(arr.size());
     float soma = 0.0f;
     for(size_t i = 0; i < arr.size(); ++i) {
         exps[i] = exp((arr[i] - max) / temp);
         soma += exps[i];
     }
-    // evita divisão por zero
     if(soma < 1e-6f) soma = 1e-6f;
-    // normalizar
     for(size_t i = 0; i < exps.size(); ++i) exps[i] /= soma;
     
     return exps;
@@ -343,11 +356,8 @@ vector<float> softmax(const vector<float>& arr, float temp = 1.0f) {
 
 vector<float> derivadaSoftmax(const vector<float>& arr, const vector<float>& gradSaida) {
     float soma = 0.0f;
-    
-    // calcula soma de gradSaida[i] * arr[i]
     for(size_t j = 0; j < gradSaida.size(); ++j) soma += gradSaida[j] * arr[j];
     
-    // calcula derivada
     vector<float> res(arr.size());
     for(size_t i = 0; i < arr.size(); ++i) res[i] = arr[i] * (gradSaida[i] - soma);
     
@@ -361,12 +371,11 @@ vector<vector<float>> softmaxLote(const vector<vector<float>>& m, float temp = 1
 }
 
 int argmax(const vector<float>& v) {
-    if(v.empty()) return -1; // caso o vetor esteja vazio
+    if(v.empty()) return -1;
     return distance(v.begin(), max_element(v.begin(), v.end()));
 }
 
 vector<float> addRuido(const vector<float>& v, float intenso = 0.01f) {
-    // configura gerador de números aleatórios
     random_device rd;
     mt19937 gen(rd());
     uniform_real_distribution<float> dis(-intenso, intenso);
@@ -670,7 +679,6 @@ int largura = 8, int altura = 8) {
     unsigned char cabecalhoArquivo[14] = {'B','M', 0,0,0,0, 0,0, 0,0, 54,0,0,0};
     unsigned char cabecalhoInfo[40] = {40,0,0,0, 0,0,0,0, 0,0,0,0, 1,0, 24,0};
 
-    // preenche tamanhos no cabeçalho(little endian)
     cabecalhoArquivo[2] = (unsigned char)(tamanhoArquivo);
     cabecalhoArquivo[3] = (unsigned char)(tamanhoArquivo >> 8);
     cabecalhoArquivo[4] = (unsigned char)(tamanhoArquivo >> 16);
@@ -691,7 +699,6 @@ int largura = 8, int altura = 8) {
 
     unsigned char bmppad[3] = {0,0,0};
 
-    // BMP grava de baixo pra cima
     for(int i = altura - 1; i >= 0; i--) {
         for(int j = 0; j < largura; j++) {
             float p = pixels[i * largura + j];
@@ -700,9 +707,9 @@ int largura = 8, int altura = 8) {
             if(p > 1) p = 1;
             
             unsigned char cinza = (unsigned char)(p * 255);
-            arq.put(cinza); // azul
-            arq.put(cinza); // verde
-            arq.put(cinza); // vermelho
+            arq.put(cinza);
+            arq.put(cinza);
+            arq.put(cinza);
         }
         arq.write((char*)bmppad, preenchimento);
     }

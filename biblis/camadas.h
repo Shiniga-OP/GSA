@@ -430,12 +430,10 @@ public:
         }
         vector<float> gradEntrada(gradiente.size());
         
+        // FIX: prop já escalou por 1/(1-taxa), retroprop só aplica a máscara
+        // escalar de novo aqui seria double-scaling e errado
         for(size_t i = 0; i < gradiente.size(); i++) {
-            if(mascara[i]) {
-                gradEntrada[i] = gradiente[i] / (1.0f - taxa);
-            } else {
-                gradEntrada[i] = 0.0f;
-            }
+            gradEntrada[i] = mascara[i] ? gradiente[i] : 0.0f;
         }
         return gradEntrada;
     }
@@ -649,15 +647,16 @@ public:
     // usa retropropLote quando disponivel
     void att(float taxaAprendizado) override {
         if(otimizador) {
-            // converte vetores 1D pra 2D pro otimizador
+            // FIX: converte ambos pra 2D, passa pro otimizador e lê os dois de volta
             vector<vector<float>> gammaMat = {gamma};
             vector<vector<float>> gradGammaMat = {gradGamma};
             vector<vector<float>> betaMat = {beta};
             vector<vector<float>> gradBetaMat = {gradBeta};
             
-            otimizador->att(gammaMat, gradGammaMat, beta, gradBeta);
+            // gamma como "pesos", beta como "bias" — ambos atualizados corretamente
+            otimizador->att(gammaMat, gradGammaMat, betaMat[0], gradBetaMat[0]);
             
-            // Atualiza gamma e beta
+            // lê os dois de volta
             gamma = gammaMat[0];
             beta = betaMat[0];
         } else {
@@ -1094,10 +1093,7 @@ public:
             vector<vector<float>> pesos2D = converterPesos2D();
             vector<vector<float>> gradPesos2D = converterGradPesos2D();
             
-            // converte bias pra matriz 2D(1xN)
-            vector<vector<float>> bias2D = {bias};
-            vector<vector<float>> gradBias2D = {gradBias};
-            
+            // FIX: bias já é 1D, passa direto (sem criar bias2D que era ignorado)
             otimizador->att(pesos2D, gradPesos2D, bias, gradBias);
             
             // reconverte pesos de volta pra 4D
