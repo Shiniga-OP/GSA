@@ -1,14 +1,12 @@
 // teste_atencao.cpp
-// compila: g++ -std=c++17 -O2 -o teste_atencao teste_atencao.cpp
 #include <iostream>
 #include <vector>
-#include <cmath>
 #include <cassert>
 #include <fstream>
 #include "biblis/ativas.h"
 #include "biblis/util.h"
 #include "biblis/otimizadores.h"
-#include "biblis/atencao.h"
+#include "biblis/camadas/atencao.h"
 
 using namespace std;
 
@@ -56,24 +54,24 @@ void testeDimensoes() {
 }
 
 // =====================================================================
-// TESTE 2: atenção foca na chave mais similar à query
+// TESTE 2: atenção foca na chave mais similar à consulta
 // =====================================================================
 void testeFoco() {
-    secao("Foco — chave similar à query recebe peso maior");
+    secao("Foco — chave similar à consulta recebe peso maior");
 
     // dimensão pequena pra controlar manualmente
-    // Wq = identidade, Wk = identidade (pra poder prever o comportamento)
+    // Pq = identidade, Pk = identidade (pra poder prever o comportamento)
     CamadaAtencao at(4, 4, 4);
 
-    // força Wq e Wk pra identidade pra tornar o teste determinístico
-    at.Wq = identidade(4);
-    at.Wk = identidade(4);
-    at.Wv = identidade(4);
+    // força Pq e Pk pra identidade pra tornar o teste determinístico
+    at.Pq = identidade(4);
+    at.Pk = identidade(4);
+    at.Pv = identidade(4);
 
-    // query/estado = [1,0,0,0]
+    // consulta/estado = [1,0,0,0]
     vector<float> estado = {1.0f, 0.0f, 0.0f, 0.0f};
 
-    // 3 chaves: a primeira é idêntica à query, as outras são ortogonais
+    // 3 chaves: a primeira é idêntica à consulta, as outras são ortogonais
     vector<vector<float>> chaves = {
         {1.0f, 0.0f, 0.0f, 0.0f}, // similar: dot = 1.0
         {0.0f, 1.0f, 0.0f, 0.0f}, // ortogonal: dot = 0.0
@@ -107,16 +105,16 @@ float perdaSimples(CamadaAtencao& at,
 }
 
 void testeGradientesNumericos() {
-    secao("Gradientes numéricos — Wq, Wk, Wv");
+    secao("Gradientes numéricos — Pq, Pk, Pv");
 
     const float h = 1e-4f;
     const float tol = 1e-2f; // tolerância de 1% pra gradientes numéricos
 
     CamadaAtencao at(3, 3, 3);
     // pesos fixos pra reprodutibilidade
-    at.Wq = {{0.1f,-0.2f,0.3f},{0.4f,0.1f,-0.1f},{-0.2f,0.3f,0.2f}};
-    at.Wk = {{0.2f, 0.1f,-0.3f},{-0.1f,0.4f,0.2f},{0.3f,-0.1f,0.1f}};
-    at.Wv = {{0.3f,-0.1f,0.2f},{0.1f,0.2f,-0.3f},{-0.2f,0.1f,0.4f}};
+    at.Pq = {{0.1f,-0.2f,0.3f},{0.4f,0.1f,-0.1f},{-0.2f,0.3f,0.2f}};
+    at.Pk = {{0.2f, 0.1f,-0.3f},{-0.1f,0.4f,0.2f},{0.3f,-0.1f,0.1f}};
+    at.Pv = {{0.3f,-0.1f,0.2f},{0.1f,0.2f,-0.3f},{-0.2f,0.1f,0.4f}};
 
     vector<float> estado  = {0.5f, -0.3f, 0.8f};
     vector<vector<float>> chaves = {
@@ -133,72 +131,72 @@ void testeGradientesNumericos() {
     at.zerarGradientes();
     at.retroprop(gradSaida);
 
-    // verifica alguns elementos de gradWq via diferenças finitas
+    // verifica alguns elementos de gradPq via diferenças finitas
     int verificados = 0;
     for(size_t i = 0; i < 3 && verificados < 3; i++) {
         for(size_t j = 0; j < 3 && verificados < 3; j++) {
-            float orig = at.Wq[i][j];
+            float orig = at.Pq[i][j];
 
-            at.Wq[i][j] = orig + h;
+            at.Pq[i][j] = orig + h;
             float lossP = perdaSimples(at, estado, chaves, alvo);
 
-            at.Wq[i][j] = orig - h;
+            at.Pq[i][j] = orig - h;
             float lossM = perdaSimples(at, estado, chaves, alvo);
 
-            at.Wq[i][j] = orig;
+            at.Pq[i][j] = orig;
 
             float gradNum = (lossP - lossM) / (2.0f * h);
-            float gradAna = at.gradWq[i][j];
+            float gradAna = at.gradPq[i][j];
 
-            string desc = "gradWq[" + to_string(i) + "][" + to_string(j) + 
+            string desc = "gradPq[" + to_string(i) + "][" + to_string(j) + 
                           "] num=" + to_string(gradNum) + " ana=" + to_string(gradAna);
             verificar(abs(gradNum - gradAna) < tol, desc);
             verificados++;
         }
     }
 
-    // verifica alguns de gradWv
+    // verifica alguns de gradPv
     verificados = 0;
     for(size_t i = 0; i < 3 && verificados < 3; i++) {
         for(size_t j = 0; j < 3 && verificados < 3; j++) {
-            float orig = at.Wv[i][j];
+            float orig = at.Pv[i][j];
 
-            at.Wv[i][j] = orig + h;
+            at.Pv[i][j] = orig + h;
             float lossP = perdaSimples(at, estado, chaves, alvo);
 
-            at.Wv[i][j] = orig - h;
+            at.Pv[i][j] = orig - h;
             float lossM = perdaSimples(at, estado, chaves, alvo);
 
-            at.Wv[i][j] = orig;
+            at.Pv[i][j] = orig;
 
             float gradNum = (lossP - lossM) / (2.0f * h);
-            float gradAna = at.gradWv[i][j];
+            float gradAna = at.gradPv[i][j];
 
-            string desc = "gradWv[" + to_string(i) + "][" + to_string(j) + 
+            string desc = "gradPv[" + to_string(i) + "][" + to_string(j) + 
                           "] num=" + to_string(gradNum) + " ana=" + to_string(gradAna);
             verificar(abs(gradNum - gradAna) < tol, desc);
             verificados++;
         }
     }
 
-    // verifica alguns de gradWk
+    // verifica alguns de gradPk
     verificados = 0;
     for(size_t i = 0; i < 3 && verificados < 3; i++) {
         for(size_t j = 0; j < 3 && verificados < 3; j++) {
-            float orig = at.Wk[i][j];
+            float orig = at.Pk[i][j];
 
-            at.Wk[i][j] = orig + h;
+            at.Pk[i][j] = orig + h;
             float lossP = perdaSimples(at, estado, chaves, alvo);
 
-            at.Wk[i][j] = orig - h;
+            at.Pk[i][j] = orig - h;
             float lossM = perdaSimples(at, estado, chaves, alvo);
 
-            at.Wk[i][j] = orig;
+            at.Pk[i][j] = orig;
 
             float gradNum = (lossP - lossM) / (2.0f * h);
-            float gradAna = at.gradWk[i][j];
+            float gradAna = at.gradPk[i][j];
 
-            string desc = "gradWk[" + to_string(i) + "][" + to_string(j) + 
+            string desc = "gradPk[" + to_string(i) + "][" + to_string(j) + 
                           "] num=" + to_string(gradNum) + " ana=" + to_string(gradAna);
             verificar(abs(gradNum - gradAna) < tol, desc);
             verificados++;
@@ -216,9 +214,9 @@ void testeGradEstado() {
     const float tol = 1e-2f;
 
     CamadaAtencao at(3, 3, 3);
-    at.Wq = {{0.5f, 0.1f,-0.2f},{-0.1f,0.4f,0.3f},{0.2f,-0.3f,0.1f}};
-    at.Wk = {{0.3f,-0.2f,0.1f},{ 0.1f,0.2f,0.4f},{-0.3f,0.1f,0.2f}};
-    at.Wv = {{0.1f, 0.4f,-0.1f},{-0.2f,0.1f,0.3f},{ 0.3f,-0.1f,0.2f}};
+    at.Pq = {{0.5f, 0.1f,-0.2f},{-0.1f,0.4f,0.3f},{0.2f,-0.3f,0.1f}};
+    at.Pk = {{0.3f,-0.2f,0.1f},{ 0.1f,0.2f,0.4f},{-0.3f,0.1f,0.2f}};
+    at.Pv = {{0.1f, 0.4f,-0.1f},{-0.2f,0.1f,0.3f},{ 0.3f,-0.1f,0.2f}};
 
     vector<float> estado = {0.3f, -0.5f, 0.7f};
     vector<vector<float>> chaves = {
@@ -260,27 +258,27 @@ void testeGradEstado() {
 void testeTreino() {
     secao("Treino — recuperação de memória simples");
 
-    // tarefa: dado estado (query), a atenção deve buscar a entrada de memória
+    // tarefa: dado estado (consulta), a atenção deve buscar a entrada de memória
     // com chave mais similar e retornar o valor associado
     //
     // CHAVES e VALORES são diferentes entre si pra eliminar ambiguidade:
-    // se chave[i] == valor[i], Wv pode aprender qualquer permutação e
+    // se chave[i] == valor[i], Pv pode aprender qualquer permutação e
     // ainda minimizar MSE sem que a atenção foque no índice certo.
     //
     // aqui: chaves são vetores de busca (one-hot), valores são alvos distintos
     // a entrada de memória é [chave|valor] concatenados em dim=8
-    // estado (query) = só a parte da chave, padded com zeros
+    // estado (consulta) = só a parte da chave, padded com zeros
 
     // O teste correto de foco:
-    // - queries têm informação APENAS nos primeiros 4 elementos
+    // - consultas têm informação APENAS nos primeiros 4 elementos
     // - memória tem chaves nos primeiros 4 e valores únicos nos últimos 4
-    // - Wk deve aprender a comparar pelos primeiros 4 (chaves)
-    // - Wv deve aprender a extrair os últimos 4 (valores)
-    // - como as queries têm zeros nos últimos 4, Wv não pode "trapacear"
-    //   usando a query pra reconstruir o valor diretamente
+    // - Pk deve aprender a comparar pelos primeiros 4 (chaves)
+    // - Pv deve aprender a extrair os últimos 4 (valores)
+    // - como as consultas têm zeros nos últimos 4, Pv não pode "trapacear"
+    //   usando a consulta pra reconstruir o valor diretamente
     //
-    // adicionalmente: chaves na memória e queries NÃO são idênticas
-    // (query tem ruído diferente) → a única solução é focar no índice certo
+    // adicionalmente: chaves na memória e consultas NÃO são idênticas
+    // (consulta tem ruído diferente) → a única solução é focar no índice certo
     const size_t D = 8;
 
     // memória: [chave(4) | valor(4)] — valores são distintos e ortogonais
@@ -289,9 +287,9 @@ void testeTreino() {
         {0.0f, 1.0f, 0.3f, 0.0f,   0.0f, 0.8f, 0.2f, 0.0f}, // entrada 1
         {0.1f, 0.0f, 1.0f, 0.2f,   0.0f, 0.0f, 0.9f, 0.1f}, // entrada 2
     };
-    // queries: parte da chave com pequena variação, parte do valor = zero
+    // consultas: parte da chave com pequena variação, parte do valor = zero
     // não é idêntica à chave da memória → o modelo é forçado a aprender similaridade
-    vector<vector<float>> queries = {
+    vector<vector<float>> consultas = {
         {0.9f, 0.3f, 0.0f, 0.0f,  0,0,0,0}, // similar à entrada 0
         {0.0f, 0.9f, 0.4f, 0.0f,  0,0,0,0}, // similar à entrada 1
         {0.2f, 0.0f, 0.9f, 0.3f,  0,0,0,0}, // similar à entrada 2
@@ -315,10 +313,10 @@ void testeTreino() {
     for(int epoca = 0; epoca < 2000; epoca++) {
         float erroTotal = 0.0f;
 
-        for(size_t ex = 0; ex < queries.size(); ex++) {
+        for(size_t ex = 0; ex < consultas.size(); ex++) {
             at.zerarGradientes();
 
-            auto saida = at.prop(queries[ex], memoria);
+            auto saida = at.prop(consultas[ex], memoria);
 
             vector<float> gradSaida(4);
             float erro = 0.0f;
@@ -332,15 +330,15 @@ void testeTreino() {
             at.retroprop(gradSaida);
             at.att(0.01f);
         }
-        ultimoErro = erroTotal / queries.size();
+        ultimoErro = erroTotal / consultas.size();
     }
 
     verificar(ultimoErro < 0.01f, "erro < 0.01 após 2000 épocas (" + to_string(ultimoErro) + ")");
 
-    // o que importa: dado a query correta, a saída corresponde ao valor correto
+    // o que importa: dado a consulta correta, a saída corresponde ao valor correto
     // o índice interno do foco é irrelevante — pode ser qualquer permutação válida
-    for(size_t ex = 0; ex < queries.size(); ex++) {
-        auto saida = at.prop(queries[ex], memoria);
+    for(size_t ex = 0; ex < consultas.size(); ex++) {
+        auto saida = at.prop(consultas[ex], memoria);
 
         // saída deve ser próxima do alvo correspondente
         float erroEx = 0.0f;
@@ -349,22 +347,22 @@ void testeTreino() {
             erroEx += d * d;
         }
         verificar(erroEx < 0.01f,
-            "query " + to_string(ex) + ": saída correta (erro=" + to_string(erroEx) + ")");
+            "consulta " + to_string(ex) + ": saída correta (erro=" + to_string(erroEx) + ")");
     }
 
-    // saídas de queries diferentes devem ser distintas entre si
-    auto s0 = at.prop(queries[0], memoria);
-    auto s1 = at.prop(queries[1], memoria);
-    auto s2 = at.prop(queries[2], memoria);
+    // saídas de consultas diferentes devem ser distintas entre si
+    auto s0 = at.prop(consultas[0], memoria);
+    auto s1 = at.prop(consultas[1], memoria);
+    auto s2 = at.prop(consultas[2], memoria);
     float dist01 = 0, dist02 = 0, dist12 = 0;
     for(size_t i = 0; i < 4; i++) {
         dist01 += (s0[i]-s1[i])*(s0[i]-s1[i]);
         dist02 += (s0[i]-s2[i])*(s0[i]-s2[i]);
         dist12 += (s1[i]-s2[i])*(s1[i]-s2[i]);
     }
-    verificar(dist01 > 0.1f, "saídas de queries 0 e 1 são distintas (dist=" + to_string(dist01) + ")");
-    verificar(dist02 > 0.1f, "saídas de queries 0 e 2 são distintas (dist=" + to_string(dist02) + ")");
-    verificar(dist12 > 0.1f, "saídas de queries 1 e 2 são distintas (dist=" + to_string(dist12) + ")");
+    verificar(dist01 > 0.1f, "saídas de consultas 0 e 1 são distintas (dist=" + to_string(dist01) + ")");
+    verificar(dist02 > 0.1f, "saídas de consultas 0 e 2 são distintas (dist=" + to_string(dist02) + ")");
+    verificar(dist12 > 0.1f, "saídas de consultas 1 e 2 são distintas (dist=" + to_string(dist12) + ")");
 }
 
 // =====================================================================
@@ -383,15 +381,15 @@ void testeZerar() {
 
     // tem gradientes agora
     float somaAntes = 0.0f;
-    for(auto& l : at.gradWq) for(float g : l) somaAntes += abs(g);
+    for(auto& l : at.gradPq) for(float g : l) somaAntes += abs(g);
     verificar(somaAntes > 0.0f, "gradientes não-zero antes de zerar");
 
     at.zerarGradientes();
 
     float somaDepois = 0.0f;
-    for(auto& l : at.gradWq) for(float g : l) somaDepois += abs(g);
-    for(auto& l : at.gradWk) for(float g : l) somaDepois += abs(g);
-    for(auto& l : at.gradWv) for(float g : l) somaDepois += abs(g);
+    for(auto& l : at.gradPq) for(float g : l) somaDepois += abs(g);
+    for(auto& l : at.gradPk) for(float g : l) somaDepois += abs(g);
+    for(auto& l : at.gradPv) for(float g : l) somaDepois += abs(g);
     verificarPerto(somaDepois, 0.0f, "todos os gradientes zerados após zerarGradientes");
 }
 

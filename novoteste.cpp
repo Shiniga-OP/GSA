@@ -2,7 +2,6 @@
 // compila: g++ -std=c++17 -O2 -o teste teste.cpp
 #include <iostream>
 #include <vector>
-#include <cmath>
 #include <cassert>
 #include "biblis/ativas.h"
 #include "biblis/util.h"
@@ -161,8 +160,8 @@ void testeDropout() {
     
     // FIX verificado: gradEntrada[i] deve ser 1.0 onde mascara=true, 0 onde mascara=false
     // NÃO deve ser 2.0 (que seria o double-scaling do bug original)
-    for(size_t i = 0; i < gradEntrada.size(); i++) {
-        verificar(gradEntrada[i] == 0.0f || abs(gradEntrada[i] - 1.0f) < 1e-6f,
+    for(size_t i = 0; i < gradEntrada.vetor.size(); i++) {
+        verificar(gradEntrada.vetor[i] == 0.0f || abs(gradEntrada.vetor[i] - 1.0f) < 1e-6f,
                   "Dropout retroprop: gradiente " + to_string(i) + " é 0 ou 1.0 (não 2.0)");
     }
     
@@ -199,8 +198,8 @@ void testeDensaGradientes() {
     // gradEntrada = W^T * gradSaida (ativação linear, derivada = 1)
     // gradEntrada[0] = W[0][0]*1 + W[1][0]*1 = 0.5 + 0.2 = 0.7
     // gradEntrada[1] = W[0][1]*1 + W[1][1]*1 = -0.3 + 0.8 = 0.5
-    verificarPerto(gradEntrada[0], 0.7f, "Densa retroprop: gradEntrada[0] = 0.7");
-    verificarPerto(gradEntrada[1], 0.5f, "Densa retroprop: gradEntrada[1] = 0.5");
+    verificarPerto(gradEntrada.vetor[0], 0.7f, "Densa retroprop: gradEntrada[0] = 0.7");
+    verificarPerto(gradEntrada.vetor[1], 0.5f, "Densa retroprop: gradEntrada[1] = 0.5");
     
     // gradPesos[i][j] = gradSaida[i] * entrada[j]
     // gradPesos[0][0] = 1*1 = 1, gradPesos[0][1] = 1*2 = 2
@@ -219,7 +218,7 @@ void testeXOR() {
     
     // dataset XOR
     vector<vector<float>> entradas = {{0,0},{0,1},{1,0},{1,1}};
-    vector<vector<float>> alvos    = {{0},  {1},  {1},  {0}};
+    vector<vector<float>> alvos = {{0},  {1},  {1},  {0}};
     
     Modelo modelo("xor");
     modelo.add(make_unique<Densa>(2, 8, "relu",    true, "d1"));

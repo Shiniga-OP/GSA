@@ -1,15 +1,13 @@
 // teste_memoria.cpp
-// compila: g++ -std=c++17 -O2 -o teste_memoria teste_memoria.cpp
 #include <iostream>
 #include <vector>
 #include <string>
-#include <cmath>
 #include <fstream>
 #include <cstdio>
 #include "biblis/ativas.h"
 #include "biblis/util.h"
 #include "biblis/otimizadores.h"
-#include "biblis/atencao.h"
+#include "biblis/camadas/atencao.h"
 #include "biblis/memoria.h"
 
 using namespace std;
@@ -64,10 +62,10 @@ void testeEscritaLeitura() {
 }
 
 // =====================================================================
-// TESTE 2: limiar de leitura lazy
+// TESTE 2: limiar de leitura economica
 // =====================================================================
 void testeLimiar() {
-    secao("Leitura lazy — limiar de atenção");
+    secao("Leitura economica — limiar de atenção");
     limparDiretorio("mem_teste2");
 
     MemoriaVetorial mem(4, 4, "mem_teste2", 0.4f); // limiar = 0.4
@@ -172,11 +170,11 @@ void testePersistencia() {
         mem.carregarIndice();
         verificar(mem.tamanho() == 2, "sessão 2: 2 entradas recuperadas");
 
-        // leitura lazy: limiar=0.1, pesos={0.9, 0.05} → só A passa
+        // leitura economica: limiar=0.1, pesos={0.9, 0.05} → só A passa
         vector<float> pesos = {0.9f, 0.05f};
         auto resultado = mem.carregar(pesos);
-        verificar(resultado.size() == 1, "leitura lazy funciona após reload");
-        verificar(resultado[0].texto == "sessao1-A", "conteúdo correto após reload");
+        verificar(resultado.size() == 1, "leitura economica funciona após recarregamento");
+        verificar(resultado[0].texto == "sessao1-A", "conteúdo correto após recarregamento");
     }
 
     limparDiretorio("mem_teste5");
@@ -240,10 +238,10 @@ void testeIntegracao() {
 
     // CamadaAtencao consulta a memória
     CamadaAtencao at(D, D, D);
-    // força Wq e Wk pra identidade pra comportamento determinístico
-    at.Wq = identidade(D);
-    at.Wk = identidade(D);
-    at.Wv = identidade(D);
+    // força Pq e Pk pra identidade pra comportamento determinístico
+    at.Pq = identidade(D);
+    at.Pk = identidade(D);
+    at.Pv = identidade(D);
 
     // estado = similar à chave A
     vector<float> estado = {0.9f, 0.1f, 0.0f, 0.0f};
@@ -255,12 +253,12 @@ void testeIntegracao() {
     at.prop(estado, chavesRam);
     auto& pesos = at.pesosAtencao();
 
-    // com Wq=Wk=I: peso maior deve ser na entrada mais similar ao estado
+    // com Pq=Pk=I: peso maior deve ser na entrada mais similar ao estado
     // estado = [0.9,0.1,0,0], chave A = [1,0,0,0] → dot = 0.9 (maior)
     verificar(pesos[0] > pesos[1], "atenção foca na entrada A (mais similar ao estado)");
     verificar(pesos[0] > pesos[2], "atenção foca na entrada A (mais similar ao estado)");
 
-    // leitura lazy: só A deve ser carregada (peso > 0.3)
+    // leitura economica: só A deve ser carregada (peso > 0.3)
     auto conteudo = mem.carregar(vector<float>(pesos.begin(), pesos.end()));
     verificar(!conteudo.empty(), "pelo menos uma entrada carregada");
     verificar(conteudo[0].texto == "experiencia A", "entrada A carregada (maior peso)");

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <math.h>
+#include <stdio.h>
 
 using namespace std;
 
@@ -718,30 +719,30 @@ int largura = 8, int altura = 8) {
 // terminal
 void gravarImg1D(const vector<float>& pixels) {
     string caracteres = " .:-=+*#%@"; 
-    cout << "+--------+" << endl;
+    printf("+--------+\n");
     for(int i = 0; i < 8; ++i) {
-        cout << "|";
+        printf("|");
         for(int j = 0; j < 8; ++j) {
             float p = pixels[i * 8 + j];
             
             if(p < 0) p = 0;
             if(p > 1) p = 1;
             
-            cout << caracteres[static_cast<int>(p * 9)];
+            printf("%d", caracteres[static_cast<int>(p * 9)]);
         }
-        cout << "|" << endl;
+        printf("|\n");
     }
-    cout << "+--------+" << endl;
+    printf("+--------+\n");
 }
 void gravarImg2D(const vector<vector<float>>& img) {
     for(const auto& linha : img) {
         for(float pixel : linha) {
-            if(pixel > 0.8f) cout << "██";
-            else if(pixel > 0.6f) cout << "▓▓";
-            else if(pixel > 0.4f) cout << "▒▒";
-            else if(pixel > 0.2f) cout << "░░";
-            else cout << "  ";
+            if(pixel > 0.8f) printf("██");
+            else if(pixel > 0.6f) printf("▓▓");
+            else if(pixel > 0.4f) printf("▒▒");
+            else if(pixel > 0.2f) printf("░░");
+            else printf("  ");
         }
-        cout << endl;
+        printf("\n");
     }
 }
