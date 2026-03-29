@@ -44,5 +44,6 @@ em desenvolvimento.
 ./biblis/camadas/norm.h
 ./biblis/camadas/perda.h
 ./biblis/camadas/embedding.h
+./biblis/tokes/bpe.h
 ```
 **implementação feita do zero, sem bibliotecas de IA externas.**
