@@ -41,5 +41,8 @@ em desenvolvimento.
 ./biblis/camadas/conv2d.h
 ./biblis/camadas/maxreuso2d.h
 ./biblis/camadas/flatten.h
+./biblis/camadas/norm.h
+./biblis/camadas/perda.h
+./biblis/camadas/embedding.h
 ```
 **implementação feita do zero, sem bibliotecas de IA externas.**

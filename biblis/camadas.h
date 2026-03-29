@@ -10,6 +10,10 @@
 #include "camadas/conv2d.h"
 #include "camadas/maxreuso2d.h"
 #include "camadas/flatten.h"
+#include "camadas/atencao.h"
+#include "camadas/norm.h"
+#include "camadas/perda.h"
+#include "camadas/embedding.h"
 
 // modelo pra gerenciamento de camadas:
 class Modelo {
