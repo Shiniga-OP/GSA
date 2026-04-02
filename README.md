@@ -18,13 +18,6 @@ em desenvolvimento.
 ## estrutura:
 ```Sh
 ~/gsa $ find . -name "*.h"
-./biblis/atencao.h
-./biblis/ativas.h
-./biblis/camadas.h
-./biblis/memoria.h
-./biblis/otimizadores.h
-./biblis/toke.h
-./biblis/util.h
 ./biblis/otimis/otimizador.h
 ./biblis/otimis/adam.h
 ./biblis/otimis/sgd.h
@@ -33,6 +26,12 @@ em desenvolvimento.
 ./biblis/otimis/adadelta.h
 ./biblis/otimis/nesterov.h
 ./biblis/otimis/adamw.h
+./biblis/ativas.h
+./biblis/camadas.h
+./biblis/memoria.h
+./biblis/otimizadores.h
+./biblis/util.h
+./biblis/tokes/bpe.h
 ./biblis/camadas/atencao.h
 ./biblis/camadas/densa.h
 ./biblis/camadas/camada.h
@@ -44,6 +43,7 @@ em desenvolvimento.
 ./biblis/camadas/norm.h
 ./biblis/camadas/perda.h
 ./biblis/camadas/embedding.h
-./biblis/tokes/bpe.h
+./biblis/camadas/posicional.h
+./biblis/camadas/bloco.h
 ```
 **implementação feita do zero, sem bibliotecas de IA externas.**

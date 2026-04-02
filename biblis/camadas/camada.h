@@ -9,6 +9,7 @@
 #include <string>
 #include <fstream>
 #include <stdexcept>
+#include <memory>
 
 using namespace std;
 

@@ -1,6 +1,5 @@
 // biblis/camadas.h
 #pragma once
-#include <memory>
 #include <functional>
 #include "util.h"
 #include "camadas/camada.h"
@@ -14,6 +13,8 @@
 #include "camadas/norm.h"
 #include "camadas/perda.h"
 #include "camadas/embedding.h"
+#include "camadas/posicional.h"
+#include "camadas/bloco.h"
 
 // modelo pra gerenciamento de camadas:
 class Modelo {

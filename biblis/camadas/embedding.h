@@ -12,8 +12,8 @@ public:
     size_t vocabTam;
     size_t dim;
 
-    vector<vector<float>> E;       // [vocabTam x dim]
-    vector<vector<float>> gradE;   // gradientes acumulados
+    vector<vector<float>> E; // [vocabTam x dim]
+    vector<vector<float>> gradE; // gradientes acumulados
 
     // cache para retropropagação
     size_t idCache;
@@ -21,12 +21,12 @@ public:
     Embedding(size_t vocabTam, size_t dim, const string& nome = "embedding")
         : Camada(nome), vocabTam(vocabTam), dim(dim), idCache(0) {
         tipo = "Embedding";
-        // Xavier sobre fan_in = vocabTam, fan_out = dim
+        // Xavier sobre fan_in = vocabTam, fan_saida = dim
         E = iniPesosXavier((int)vocabTam, (int)dim);
         gradE = matrizZeros(vocabTam, dim);
     }
 
-    // prop por id inteiro — interface principal
+    // prop por id inteiro interface principal
     vector<float> prop(size_t id) {
         if(id >= vocabTam)
             throw invalid_argument("[" + nome + "]: id " + to_string(id) + " fora do vocabulário");
@@ -42,13 +42,14 @@ public:
     }
 
     // retroprop: gradSaida(dim,) -> acumula em gradE[idCache]
-    // retorna gradiente zero em relação à entrada (id é discreto)
+    // retorna gradiente zero em relação a entrada(id é discreto)
     GradGenerico retroprop(const vector<float>& gradSaida) override {
         if(gradSaida.size() != dim)
             throw invalid_argument("[" + nome + "]: dimensão do gradiente incorreta");
-        for(size_t j = 0; j < dim; j++)
+        for(size_t j = 0; j < dim; j++) {
             gradE[idCache][j] += gradSaida[j];
-        // entrada é um índice discreto — não há gradiente real
+        }
+        // entrada é um indice discreto não ha gradiente real
         return GradGenerico(vector<float>(1, 0.0f));
     }
 
@@ -58,15 +59,16 @@ public:
             vector<float> gradBiasZero(1, 0.0f);
             otimizador->att(E, gradE, biasZero, gradBiasZero);
         } else {
-            for(size_t i = 0; i < vocabTam; i++)
-                for(size_t j = 0; j < dim; j++)
+            for(size_t i = 0; i < vocabTam; i++) {
+                for(size_t j = 0; j < dim; j++) {
                     E[i][j] -= taxaAprendizado * gradE[i][j];
+                }
+            }
         }
     }
 
     void zerarGradientes() override {
-        for(auto& linha : gradE)
-            fill(linha.begin(), linha.end(), 0.0f);
+        for(auto& linha : gradE) fill(linha.begin(), linha.end(), 0.0f);
     }
 
     bool temParametros() const override { return true; }
@@ -77,8 +79,9 @@ public:
         if(!a) throw runtime_error("[" + nome + "]: falha ao abrir arquivo para salvar");
         a.write(reinterpret_cast<const char*>(&vocabTam), sizeof(vocabTam));
         a.write(reinterpret_cast<const char*>(&dim), sizeof(dim));
-        for(const auto& linha : E)
+        for(const auto& linha : E) {
             a.write(reinterpret_cast<const char*>(linha.data()), dim * sizeof(float));
+        }
     }
 
     void carregar(const string& arquivo) override {
@@ -87,8 +90,9 @@ public:
         a.read(reinterpret_cast<char*>(&vocabTam), sizeof(vocabTam));
         a.read(reinterpret_cast<char*>(&dim), sizeof(dim));
         E.assign(vocabTam, vector<float>(dim));
-        for(auto& linha : E)
+        for(auto& linha : E) {
             a.read(reinterpret_cast<char*>(linha.data()), dim * sizeof(float));
+        }
         gradE = matrizZeros(vocabTam, dim);
     }
 };
