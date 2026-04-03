@@ -30,6 +30,7 @@ em desenvolvimento.
 ./biblis/camadas.h
 ./biblis/memoria.h
 ./biblis/otimizadores.h
+./biblis/modelo.h
 ./biblis/util.h
 ./biblis/tokes/bpe.h
 ./biblis/camadas/atencao.h
@@ -45,5 +46,6 @@ em desenvolvimento.
 ./biblis/camadas/embedding.h
 ./biblis/camadas/posicional.h
 ./biblis/camadas/bloco.h
+./biblis/camadas/transformer.h
 ```
 **implementação feita do zero, sem bibliotecas de IA externas.**
