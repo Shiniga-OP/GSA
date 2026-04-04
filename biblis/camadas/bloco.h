@@ -7,14 +7,13 @@
 
 // bloco transformer padrão com conexões residuais
 
-// fluxo:
+// fluxo token-a-token:
 // x -> norm1 -> atencao(x, chaves) -> + x  -> x1
 // x1 -> norm2 -> oculta -> + x1 -> saida
 
-// oculta: Densa(dim -> dimoculta, ativacao) -> Densa(dimoculta -> dim, linear)
-// dimoculta padrão = 4 * dim(convencional)
-
-// chaves externas: se nullptr, usa a propria entrada como chaves(auto-atenção)
+// fluxo lote [T x dim]:
+// X -> norm1 -> atencao_lote(X) -> + X -> X1
+// X1 -> norm2 -> oculta -> + X1 -> saida
 
 class BlocoTransformer : public Camada {
 public:
@@ -28,14 +27,24 @@ public:
     Densa oculta1;
     Densa oculta2;
 
-    // cache pra retropropagação
-    vector<float> entradaCache; // x original
-    vector<float> x1Cache; // após residual da atenção
-    vector<float> normSaida1; // saída da norm1
-    vector<float> normSaida2; // saída da norm2
-    vector<float> atencaoSaida; // saída da atenção(antes do residual)
-    vector<float> oculta1Saida; // saída do oculta1
-    vector<vector<float>> chavesCache; // chaves usadas(pra retroprop)
+    // cache token-a-token
+    vector<float> entradaCache;
+    vector<float> x1Cache;
+    vector<float> normSaida1;
+    vector<float> normSaida2;
+    vector<float> atencaoSaida;
+    vector<float> oculta1Saida;
+    vector<vector<float>> chavesCache;
+
+    // cache lote: estado por token
+    struct CacheLoteBloco {
+        vector<vector<float>> entrada; // [T x dim]
+        vector<vector<float>> normSaida1; // [T x dim]
+        vector<vector<float>> atencaoSaida; // [T x dim]
+        vector<vector<float>> x1; // [T x dim]
+        vector<vector<float>> normSaida2; // [T x dim]
+        vector<vector<float>> oculta1Saida; // [T x dimoculta]
+    } cacheLoteBloco;
 
     BlocoTransformer(
         size_t dim,
@@ -48,21 +57,18 @@ public:
           dim(dim),
           dimAtencao(dimAtencao),
           dimoculta(dimoculta > 0 ? dimoculta : 4 * dim),
-          norm1(dim,  1e-5f, nome + "_norm1"),
+          norm1(dim, 1e-5f, nome + "_norm1"),
           atencao(dim, dimAtencao, dim, nome + "_atencao"),
-          norm2(dim,  1e-5f, nome + "_norm2"),
-          oculta1(dim,  (dimoculta > 0 ? dimoculta : 4 * dim), ativacaooculta, true, nome + "_oculta1"),
+          norm2(dim, 1e-5f, nome + "_norm2"),
+          oculta1(dim, (dimoculta > 0 ? dimoculta : 4 * dim), ativacaooculta, true, nome + "_oculta1"),
           oculta2((dimoculta > 0 ? dimoculta : 4 * dim), dim, "linear", true, nome + "_oculta2") {
         tipo = "BlocoTransformer";
     }
 
-    // prop sem chaves externas: auto-atenção(x atende a si mesmo)
     vector<float> prop(const vector<float>& entrada) override {
-        // monta chaves = {entrada} atenção sobre si mesmo
         return prop(entrada, {entrada});
     }
 
-    // prop com chaves externas: cross-atenção
     vector<float> prop(
         const vector<float>& entrada,
         const vector<vector<float>>& chaves
@@ -73,58 +79,117 @@ public:
         entradaCache = entrada;
         chavesCache  = chaves;
 
-        // === bloco de atenção ===
         normSaida1 = norm1.prop(entrada);
         atencaoSaida = atencao.prop(normSaida1, chaves);
 
-        // residual
         x1Cache.resize(dim);
         for(size_t i = 0; i < dim; i++)
             x1Cache[i] = entrada[i] + atencaoSaida[i];
 
-        // === bloco oculta ===
         normSaida2 = norm2.prop(x1Cache);
         oculta1Saida  = oculta1.prop(normSaida2);
         vector<float> oculta2Saida = oculta2.prop(oculta1Saida);
 
-        // residual
         vector<float> saida(dim);
-        for(size_t i = 0; i < dim; i++) {
+        for(size_t i = 0; i < dim; i++)
             saida[i] = x1Cache[i] + oculta2Saida[i];
+        return saida;
+    }
+    // propLote: entrada [T x dim] -> saida [T x dim]
+    // atenção causal sobre toda a sequência de uma vez
+    vector<vector<float>> propLote(const vector<vector<float>>& entrada) override {
+        size_t T = entrada.size();
+        if(T == 0) throw invalid_argument("[" + nome + "]: lote vazio");
+
+        cacheLoteBloco.entrada = entrada;
+
+        // norm1 sobre lote inteiro(cache por token dentro de norm1)
+        cacheLoteBloco.normSaida1 = norm1.propLote(entrada);
+
+        // atenção causal sobre lote inteiro
+        cacheLoteBloco.atencaoSaida = atencao.propLote(cacheLoteBloco.normSaida1);
+
+        // residual: x1 = entrada + atencaoSaida
+        cacheLoteBloco.x1.resize(T, vector<float>(dim));
+        for(size_t t = 0; t < T; t++) {
+            for(size_t i = 0; i < dim; i++) {
+                cacheLoteBloco.x1[t][i] = entrada[t][i] + cacheLoteBloco.atencaoSaida[t][i];
+            }
+        }
+        // norm2 sobre lote inteiro (cache por token dentro de norm2)
+        cacheLoteBloco.normSaida2 = norm2.propLote(cacheLoteBloco.x1);
+
+        // oculta por token(Densa ja acumula gradientes corretamente token a token)
+        cacheLoteBloco.oculta1Saida.resize(T);
+        vector<vector<float>> saida(T, vector<float>(dim));
+        for(size_t t = 0; t < T; t++) {
+            cacheLoteBloco.oculta1Saida[t] = oculta1.prop(cacheLoteBloco.normSaida2[t]);
+            vector<float> o2 = oculta2.prop(cacheLoteBloco.oculta1Saida[t]);
+            for(size_t i = 0; i < dim; i++) {
+                saida[t][i] = cacheLoteBloco.x1[t][i] + o2[i];
+            }
         }
         return saida;
     }
 
-    // retroprop: gradSaida(dim,) ->
-    // retorna GradGenerico com:
-    // vetor = gradEntrada(dim,)
-    // matriz = gradChaves(m x dim)
     GradGenerico retroprop(const vector<float>& gradSaida) override {
-        if(gradSaida.size() != dim) {
+        if(gradSaida.size() != dim)
             throw invalid_argument("[" + nome + "]: dimensão do gradiente incorreta");
-        }
-        // === residual oculta: grad flui pra x1 e pra oculta2 ===
-        // saida = x1 + oculta2Saida => dL/dx1 += gradSaida, dL/doculta2 = gradSaida
-        vector<float> gradX1(gradSaida); // copia pra acumular residual
+
+        vector<float> gradX1(gradSaida);
 
         auto goculta2 = oculta2.retroprop(gradSaida);
         auto goculta1 = oculta1.retroprop(goculta2.vetor);
         auto gNorm2 = norm2.retroprop(goculta1.vetor);
 
-        for(size_t i = 0; i < dim; i++) {
+        for(size_t i = 0; i < dim; i++)
             gradX1[i] += gNorm2.vetor[i];
-        }
-        // === residual atenção: grad flui pra entrada e pra atencao ===
-        // x1 = entrada + atencaoSaida  =>  dL/dentrada += gradX1, dL/datencao = gradX1
-        vector<float> gradEntrada(gradX1); // copia pra acumular residual
+
+        vector<float> gradEntrada(gradX1);
 
         auto gAtencao = atencao.retroprop(gradX1);
-        auto gNorm1   = norm1.retroprop(gAtencao.gradEstado);
+        auto gNorm1 = norm1.retroprop(gAtencao.gradEstado);
 
         for(size_t i = 0; i < dim; i++) {
             gradEntrada[i] += gNorm1.vetor[i];
         }
         return GradGenerico(gradEntrada, gAtencao.gradChaves);
+    }
+
+    // retropropLote: gradSaida [T x dim] -> gradEntrada [T x dim]
+    vector<vector<float>> retropropLote(const vector<vector<float>>& gradSaida) override {
+        size_t T = gradSaida.size();
+        if(T == 0) throw invalid_argument("[" + nome + "]: lote vazio no retroprop");
+
+        // residual oculta: gradX1[t] = gradSaida[t] + grad_via_oculta[t]
+        // oculta foi processada token a token, retroprop token a token tambem
+        vector<vector<float>> gradNorm2(T, vector<float>(dim));
+        for(size_t t = 0; t < T; t++) {
+            auto go2 = oculta2.retroprop(gradSaida[t]);
+            auto go1 = oculta1.retroprop(go2.vetor);
+            gradNorm2[t] = go1.vetor;
+        }
+        // norm2 retroprop sobre lote(usa cacheLoteNorm de norm2)
+        vector<vector<float>> gradX1 = norm2.retropropLote(gradNorm2);
+        for(size_t t = 0; t < T; t++) {
+            for(size_t i = 0; i < dim; i++) {
+                gradX1[t][i] += gradSaida[t][i]; // residual
+            }
+        }
+        // atenção causal retroprop sobre lote
+        vector<vector<float>> gradNorm1 = atencao.retropropLote(gradX1);
+
+        // norm1 retroprop sobre lote(usa cacheLoteNorm de norm1)
+        vector<vector<float>> gradEntradaNorm1 = norm1.retropropLote(gradNorm1);
+
+        // residual atenção
+        vector<vector<float>> gradEntrada(T, vector<float>(dim));
+        for(size_t t = 0; t < T; t++) {
+            for(size_t i = 0; i < dim; i++) {
+                gradEntrada[t][i] = gradX1[t][i] + gradEntradaNorm1[t][i];
+            }
+        }
+        return gradEntrada;
     }
 
     void att(float taxaAprendizado) override {
@@ -153,7 +218,6 @@ public:
         + oculta2.numParametros();
     }
 
-    // propaga otimizador pra todas as sub-camadas
     void defOtimizadores(
         unique_ptr<Otimizador> oNorm1,
         unique_ptr<Otimizador> oAtencao,
@@ -165,8 +229,6 @@ public:
         norm2.defOtimizador(std::move(oNorm2));
         oculta1.defOtimizador(std::move(ooculta1));
         oculta2.defOtimizador(std::move(ooculta2));
-        // atencao tem otimizadores separados por projeção
-        // usa defOtimizador base(aplica so a um; pra controle fino use defOtimizadores da atencao)
         atencao.defOtimizador(std::move(oAtencao));
     }
 

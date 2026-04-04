@@ -16,10 +16,10 @@ struct CamadaPerda {
     size_t alvoCache;
 
     float prop(const vector<float>& logits, size_t alvo) {
-        if(alvo >= logits.size())
+        if(alvo >= logits.size()) {
             throw invalid_argument("[CamadaPerda]: alvo " + to_string(alvo)
-                + " fora do intervalo [0, " + to_string(logits.size()) + ")");
-
+            + " fora do intervalo [0, " + to_string(logits.size()) + ")");
+        }
         alvoCache = alvo;
         probsCache = softmax(logits);
 

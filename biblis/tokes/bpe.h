@@ -17,7 +17,7 @@ static inline int _tamUTF8(unsigned char c) {
 }
 
 // fragmenta string em caracteres UTF-8 completos
-static inline std::vector<std::string> _splitUTF8(const std::string& s) {
+static inline std::vector<std::string> _dividirUTF8(const std::string& s) {
     std::vector<std::string> chars;
     size_t i = 0;
     while(i < s.size()) {
@@ -50,7 +50,7 @@ public:
 
         // caracteres UTF-8 unicos primeiro
         for(const std::string& texto : textos) {
-            for(const std::string& c : _splitUTF8(texto)) {
+            for(const std::string& c : _dividirUTF8(texto)) {
                 if(c == " " || c == "\t" || c == "\n") continue;
                 if(tokenPraId.find(c) == tokenPraId.end()) {
                     tokenPraId[c] = proximoId;
@@ -80,7 +80,7 @@ public:
                 resultado.push_back(it->second);
             } else {
                 // fragmenta em caracteres UTF-8
-                for(const std::string& c : _splitUTF8(token)) {
+                for(const std::string& c : _dividirUTF8(token)) {
                     auto cit = tokenPraId.find(c);
                     if(cit != tokenPraId.end()) resultado.push_back(cit->second);
                     else resultado.push_back(1); // <DES>
@@ -113,7 +113,7 @@ public:
         if(cit != cache.end()) return cit->second;
 
         // fragmenta em caracteres UTF-8 completos
-        std::vector<std::string> palavra = _splitUTF8(token);
+        std::vector<std::string> palavra = _dividirUTF8(token);
 
         if(palavra.size() == 1) {
             cache[token] = palavra;
@@ -201,7 +201,7 @@ public:
         }
         std::unordered_map<std::string,std::vector<std::string>> vocab;
         for(auto& par : freqPalavras) {
-            vocab[par.first] = _splitUTF8(par.first); // UTF-8 correto
+            vocab[par.first] = _dividirUTF8(par.first); // UTF-8 correto
         }
         for(int iter = 0; iter < numMerges; ++iter) {
             std::unordered_map<std::string,int> freqPares;

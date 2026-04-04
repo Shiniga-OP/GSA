@@ -110,8 +110,8 @@ public:
         ofstream a(arquivo, ios::binary);
         if(!a) throw runtime_error("[" + nome + "]: falha ao abrir arquivo para salvar");
 
-        a.write(reinterpret_cast<const char*>(&dim),       sizeof(dim));
-        a.write(reinterpret_cast<const char*>(&seqMax),    sizeof(seqMax));
+        a.write(reinterpret_cast<const char*>(&dim), sizeof(dim));
+        a.write(reinterpret_cast<const char*>(&seqMax), sizeof(seqMax));
         a.write(reinterpret_cast<const char*>(&treinavel), sizeof(treinavel));
 
         // sinusoidal é deterministico, não precisa salvar
@@ -147,7 +147,7 @@ public:
         for(size_t pos = 0; pos < seqMax; pos++) {
             for(size_t i = 0; i < dim / 2; i++) {
                 float freq = 1.0f / pow(10000.0f, (2.0f * i) / (float)dim);
-                PE[pos][2 * i]     = sin(pos * freq);
+                PE[pos][2 * i] = sin(pos * freq);
                 PE[pos][2 * i + 1] = cos(pos * freq);
             }
             // se dim for impar, preenche ultimo com sin

@@ -14,37 +14,46 @@
 
 // Pq, Pk, Pv são treinaveis por retropropagação
 
+// propLote: processa [T x dim] com máscara causal embutida
+// cada token t atende apenas aos tokens 0..t
+
 class CamadaAtencao : public Camada {
 public:
-    size_t dim; // dimensão da entrada(estado e chaves)
-    size_t dimAtencao; // dimensão interna Q/K
-    size_t dimSaida; // dimensão da saida(projeção V)
+    size_t dim;
+    size_t dimAtencao;
+    size_t dimSaida;
 
-    // projeções treinaveis
     vector<vector<float>> Pq; // [dimAtencao x dim]
     vector<vector<float>> Pk; // [dimAtencao x dim]
-    vector<vector<float>> Pv; // [dimSaida   x dim]
+    vector<vector<float>> Pv; // [dimSaida x dim]
 
-    // gradientes
     vector<vector<float>> gradPq;
     vector<vector<float>> gradPk;
     vector<vector<float>> gradPv;
 
-    // otimizadores independentes por projeção
     unique_ptr<Otimizador> otimQ;
     unique_ptr<Otimizador> otimK;
     unique_ptr<Otimizador> otimV;
 
-    // cache pra retropropagação
+    // cache token a token(geração)
     vector<float> consultaCache;
-    vector<vector<float>> chavesCache;// k[i] projetadas
-    vector<vector<float>> valoresCache; // v[i] projetados
-    vector<float> pesosCache; // softmax(pontos)
-    vector<float> pontosCache; // q*k[i]/sqrt(d) antes do softmax
-    vector<float> entradaCache; // estado original
-    vector<vector<float>> chavesEntradaCache; // chaves originais(antes de Pk)
+    vector<vector<float>> chavesCache;
+    vector<vector<float>> valoresCache;
+    vector<float> pesosCache;
+    vector<float> pontosCache;
+    vector<float> entradaCache;
+    vector<vector<float>> chavesEntradaCache;
 
-    float escala; // 1/sqrt(dimAtencao)
+    // cache lote(treino)
+    struct CacheLote {
+        vector<vector<float>> Q; // [T x dimAtencao]
+        vector<vector<float>> K; // [T x dimAtencao]
+        vector<vector<float>> V; // [T x dimSaida]
+        vector<vector<float>> pesos; // [T x T](mascara causal aplicada)
+        vector<vector<float>> entrada; // [T x dim]
+    } cacheLote;
+
+    float escala;
 
     CamadaAtencao(size_t dim, size_t dimAtencao, size_t dimSaida,
     const string& nome = "atencao")
@@ -53,11 +62,9 @@ public:
           escala(1.0f / sqrt((float)dimAtencao)) {
 
         tipo = "CamadaAtencao";
-
         Pq = iniPesosXavier(dimAtencao, dim);
         Pk = iniPesosXavier(dimAtencao, dim);
         Pv = iniPesosXavier(dimSaida, dim);
-
         gradPq = matrizZeros(dimAtencao, dim);
         gradPk = matrizZeros(dimAtencao, dim);
         gradPv = matrizZeros(dimSaida, dim);
@@ -77,7 +84,6 @@ public:
         throw runtime_error("[" + nome + "]: use prop(estado, chaves)");
     }
 
-    // prop real: estado(dim,) + chaves[](m x dim) -> saida(dimSaida,)
     vector<float> prop(
         const vector<float>& estado,
         const vector<vector<float>>& chaves
@@ -86,36 +92,27 @@ public:
             throw invalid_argument("[" + nome + "]: dimensão do estado incorreta");
         if(chaves.empty())
             throw invalid_argument("[" + nome + "]: conjunto de chaves vazio");
-        for(const auto& c : chaves) {
-            if(c.size() != dim)
-                throw invalid_argument("[" + nome + "]: dimensão de chave incorreta");
-        }
-        size_t m = chaves.size();
 
+        size_t m = chaves.size();
         entradaCache = estado;
         chavesEntradaCache = chaves;
 
-        // q = Pq * estado
         consultaCache = aplicarMatriz(Pq, estado);
 
-        // k[i] = Pk * chaves[i], v[i] = Pv * chaves[i]
         chavesCache.resize(m);
         valoresCache.resize(m);
         for(size_t i = 0; i < m; i++) {
             chavesCache[i] = aplicarMatriz(Pk, chaves[i]);
             valoresCache[i] = aplicarMatriz(Pv, chaves[i]);
         }
-        // pontos = q * k[i] / sqrt(dimAtencao)
         pontosCache.resize(m);
         for(size_t i = 0; i < m; i++) {
             float dot = 0.0f;
             for(size_t j = 0; j < dimAtencao; j++) dot += consultaCache[j] * chavesCache[i][j];
             pontosCache[i] = dot * escala;
         }
-        // softmax
         pesosCache = softmax(pontosCache);
 
-        // saida = soma(pesos[i] * v[i])
         vector<float> saida(dimSaida, 0.0f);
         for(size_t i = 0; i < m; i++) {
             for(size_t j = 0; j < dimSaida; j++) {
@@ -125,60 +122,86 @@ public:
         return saida;
     }
 
-    // retroprop: gradSaida(dimSaida,) ->
-    // acumula gradPq, gradPk, gradPv
-    // retorna GradGenerico com:
-    // vetor = gradEstado (dim,)
-    // matriz = gradChaves (m x dim)
+    // propLote: entrada [T x dim] -> saida [T x dim]
+    // mascara causal: token t atende a 0..t
+    vector<vector<float>> propLote(const vector<vector<float>>& entrada) override {
+        size_t T = entrada.size();
+        if(T == 0) throw invalid_argument("[" + nome + "]: lote vazio");
+
+        cacheLote.entrada = entrada;
+        cacheLote.Q.resize(T);
+        cacheLote.K.resize(T);
+        cacheLote.V.resize(T);
+        cacheLote.pesos.assign(T, vector<float>(T, 0.0f));
+
+        for(size_t t = 0; t < T; t++) {
+            cacheLote.Q[t] = aplicarMatriz(Pq, entrada[t]);
+            cacheLote.K[t] = aplicarMatriz(Pk, entrada[t]);
+            cacheLote.V[t] = aplicarMatriz(Pv, entrada[t]);
+        }
+        vector<vector<float>> saida(T, vector<float>(dimSaida, 0.0f));
+
+        for(size_t t = 0; t < T; t++) {
+            // pontos q[t] * k[s] para s <= t
+            vector<float> pontos(t + 1);
+            for(size_t s = 0; s <= t; s++) {
+                float dot = 0.0f;
+                for(size_t j = 0; j < dimAtencao; j++)
+                    dot += cacheLote.Q[t][j] * cacheLote.K[s][j];
+                pontos[s] = dot * escala;
+            }
+            vector<float> pesos = softmax(pontos); // [t+1]
+            for(size_t s = 0; s <= t; s++)
+                cacheLote.pesos[t][s] = pesos[s];
+
+            for(size_t s = 0; s <= t; s++) {
+                for(size_t j = 0; j < dimSaida; j++)
+                    saida[t][j] += pesos[s] * cacheLote.V[s][j];
+            }
+        }
+        return saida;
+    }
+
     GradGenerico retroprop(const vector<float>& gradSaida) override {
         if(gradSaida.size() != dimSaida) throw invalid_argument("[" + nome + "]: dimensão do gradiente de saída incorreta");
 
         size_t m = pesosCache.size();
 
-        // dL/dv[i] = pesos[i] * gradSaida
         vector<vector<float>> gradV(m, vector<float>(dimSaida));
         for(size_t i = 0; i < m; i++) {
             for(size_t j = 0; j < dimSaida; j++) {
                 gradV[i][j] = pesosCache[i] * gradSaida[j];
             }
         }
-        // dL/dpesos[i] = gradSaida · v[i]
         vector<float> gradPesos(m);
         for(size_t i = 0; i < m; i++) {
             float dot = 0.0f;
             for(size_t j = 0; j < dimSaida; j++) dot += gradSaida[j] * valoresCache[i][j];
             gradPesos[i] = dot;
         }
-        // gradiente pelo softmax
         vector<float> gradpontos(m);
         float soma = 0.0f;
         for(size_t i = 0; i < m; i++) soma += gradPesos[i] * pesosCache[i];
         for(size_t i = 0; i < m; i++) gradpontos[i] = pesosCache[i] * (gradPesos[i] - soma);
-
-        // escala
         for(size_t i = 0; i < m; i++) gradpontos[i] *= escala;
 
-        // dL/dq = soma(gradpontos[i] * k[i])
         vector<float> gradQ(dimAtencao, 0.0f);
         for(size_t i = 0; i < m; i++) {
             for(size_t j = 0; j < dimAtencao; j++) {
                 gradQ[j] += gradpontos[i] * chavesCache[i][j];
             }
         }
-        // dL/dk[i] = gradpontos[i] * q
         vector<vector<float>> gradK(m, vector<float>(dimAtencao));
         for(size_t i = 0; i < m; i++) {
             for(size_t j = 0; j < dimAtencao; j++) {
                 gradK[i][j] = gradpontos[i] * consultaCache[j];
             }
         }
-        // acumula gradPq: dL/dPq = gradQ ⊗ estado
         for(size_t i = 0; i < dimAtencao; i++) {
             for(size_t j = 0; j < dim; j++) {
                 gradPq[i][j] += gradQ[i] * entradaCache[j];
             }
         }
-        // acumula gradPk e gradPv
         for(size_t i = 0; i < m; i++) {
             for(size_t a = 0; a < dimAtencao; a++) {
                 for(size_t b = 0; b < dim; b++) {
@@ -191,14 +214,12 @@ public:
                 }
             }
         }
-        // dL/destado = Pq^T * gradQ
         vector<float> gradEstado(dim, 0.0f);
         for(size_t j = 0; j < dim; j++) {
             for(size_t i = 0; i < dimAtencao; i++) {
                 gradEstado[j] += Pq[i][j] * gradQ[i];
             }
         }
-        // dL/dchaves[i] = Pk^T * gradK[i] + Pv^T * gradV[i]
         vector<vector<float>> gradChaves(m, vector<float>(dim, 0.0f));
         for(size_t i = 0; i < m; i++) {
             for(size_t j = 0; j < dim; j++) {
@@ -213,21 +234,121 @@ public:
         return GradGenerico(gradEstado, gradChaves);
     }
 
+    // retropropLote: gradSaida [T x dimSaida] -> gradEntrada [T x dim]
+    // acumula gradPq, gradPk, gradPv
+    vector<vector<float>> retropropLote(const vector<vector<float>>& gradSaida) override {
+        size_t T = gradSaida.size();
+        if(T == 0) throw invalid_argument("[" + nome + "]: lote vazio no retroprop");
+
+        // gradV[t][s][j] = pesos[t][s] * gradSaida[t][j]
+        // gradPesos[t][s] = gradSaida[t] · V[s]
+        // gradpontos[t][s] via jacobiana softmax
+        // gradQ[t] = soma_s(gradpontos[t][s] * K[s])
+        // gradK[s] = soma_t(gradpontos[t][s] * Q[t])
+        // gradV[s] = soma_t(pesos[t][s] * gradSaida[t])
+
+        // gradK e gradV acumulados por posição de chave
+        vector<vector<float>> gradK(T, vector<float>(dimAtencao, 0.0f));
+        vector<vector<float>> gradVk(T, vector<float>(dimSaida, 0.0f));
+
+        vector<vector<float>> gradEntrada(T, vector<float>(dim, 0.0f));
+
+        for(size_t t = 0; t < T; t++) {
+            size_t m = t + 1; // token t atende a 0..t
+
+            // gradPesos[s] = gradSaida[t] * V[s]
+            vector<float> gPesos(m);
+            for(size_t s = 0; s < m; s++) {
+                float dot = 0.0f;
+                for(size_t j = 0; j < dimSaida; j++) {
+                    dot += gradSaida[t][j] * cacheLote.V[s][j];
+                }
+                gPesos[s] = dot;
+            }
+            // acumula gradV[s] += pesos[t][s] * gradSaida[t]
+            for(size_t s = 0; s < m; s++) {
+                for(size_t j = 0; j < dimSaida; j++) {
+                    gradVk[s][j] += cacheLote.pesos[t][s] * gradSaida[t][j];
+                }
+            }
+            // jacobiana softmax
+            vector<float> gPontos(m);
+            float soma = 0.0f;
+            for(size_t s = 0; s < m; s++) soma += gPesos[s] * cacheLote.pesos[t][s];
+            for(size_t s = 0; s < m; s++) {
+                gPontos[s] = cacheLote.pesos[t][s] * (gPesos[s] - soma) * escala;
+            }
+            // gradQ[t] = soma_s(gPontos[s] * K[s])
+            vector<float> gQ(dimAtencao, 0.0f);
+            for(size_t s = 0; s < m; s++) {
+                for(size_t j = 0; j < dimAtencao; j++) {
+                    gQ[j] += gPontos[s] * cacheLote.K[s][j];
+                }
+            }
+            // acumula gradK[s] += gPontos[s] * Q[t]
+            for(size_t s = 0; s < m; s++) {
+                for(size_t j = 0; j < dimAtencao; j++) {
+                    gradK[s][j] += gPontos[s] * cacheLote.Q[t][j];
+                }
+            }
+            // acumula gradPq += gQ * entrada[t]
+            for(size_t i = 0; i < dimAtencao; i++) {
+                for(size_t j = 0; j < dim; j++) {
+                    gradPq[i][j] += gQ[i] * cacheLote.entrada[t][j];
+                }
+            }
+            // gradEntrada[t] via Pq^T * gQ
+            for(size_t j = 0; j < dim; j++) {
+                for(size_t i = 0; i < dimAtencao; i++) {
+                    gradEntrada[t][j] += Pq[i][j] * gQ[i];
+                }
+            }
+        }
+
+        // acumula gradPk, gradPv e gradEntrada via K, V
+        for(size_t s = 0; s < T; s++) {
+            for(size_t i = 0; i < dimAtencao; i++) {
+                for(size_t j = 0; j < dim; j++) {
+                    gradPk[i][j] += gradK[s][i] * cacheLote.entrada[s][j];
+                }
+            }
+            for(size_t i = 0; i < dimSaida; i++) {
+                for(size_t j = 0; j < dim; j++) {
+                    gradPv[i][j] += gradVk[s][i] * cacheLote.entrada[s][j];
+                }
+            }
+            // gradEntrada[s] via Pk^T * gradK[s] + Pv^T * gradVk[s]
+            for(size_t j = 0; j < dim; j++) {
+                for(size_t i = 0; i < dimAtencao; i++) {
+                    gradEntrada[s][j] += Pk[i][j] * gradK[s][i];
+                }
+                for(size_t i = 0; i < dimSaida; i++) {
+                    gradEntrada[s][j] += Pv[i][j] * gradVk[s][i];
+                }
+            }
+        }
+        return gradEntrada;
+    }
+
     void att(float taxaAprendizado) override {
         vector<float> biasZero(1, 0.0f);
         vector<float> gradBiasZero(1, 0.0f);
 
         if(otimQ) otimQ->att(Pq, gradPq, biasZero, gradBiasZero);
         else {
-            for(size_t i = 0; i < dimAtencao; i++)
-                for(size_t j = 0; j < dim; j++)
+            for(size_t i = 0; i < dimAtencao; i++) {
+                for(size_t j = 0; j < dim; j++) {
                     Pq[i][j] -= taxaAprendizado * gradPq[i][j];
+                }
+            }
         }
         if(otimK) otimK->att(Pk, gradPk, biasZero, gradBiasZero);
         else {
-            for(size_t i = 0; i < dimAtencao; i++)
-                for(size_t j = 0; j < dim; j++)
+            for(size_t i = 0; i < dimAtencao; i++) {
+                for(size_t j = 0; j < dim; j++) {
                     Pk[i][j] -= taxaAprendizado * gradPk[i][j];
+                }
+            }
         }
         if(otimV) otimV->att(Pv, gradPv, biasZero, gradBiasZero);
         else {
@@ -246,12 +367,10 @@ public:
     }
 
     bool temParametros() const override { return true; }
-
     size_t numParametros() const override {
         return dimAtencao * dim + dimAtencao * dim + dimSaida * dim;
     }
 
-    // retorna os pesos de atenção da ultima chamada(util pro sistema de memoria)
     const vector<float>& pesosAtencao() const { return pesosCache; }
 
     void salvar(const string& arquivo) const override {
