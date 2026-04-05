@@ -46,6 +46,5 @@ em desenvolvimento.
 ./biblis/camadas/embedding.h
 ./biblis/camadas/posicional.h
 ./biblis/camadas/bloco.h
-./biblis/camadas/transformer.h
 ```
 **implementação feita do zero, sem bibliotecas de IA externas.**
