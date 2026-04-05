@@ -22,7 +22,7 @@ static vector<string> corpusRefinar() {
         <|usr|>: O que isso faz?
         <|alva|>: *console.log("Olá mundo");* imprime uma mensagem no console
         <|usr|>: Obrigado
-        <|alva|>: Obrigada também :))",
+        <|alva|>: Obrigada também)",
     };
 }
 
@@ -33,9 +33,10 @@ int main(int argc, char* argv[]) {
     TreinadorBPE treinador;
     TokenizadorBPE* tok = nullptr;
     Modelo* modelo = nullptr;
+    bool legado = false;
 
-    if(argc >= 2) {
-        const char* arquivo = argv[1];
+    if(!legado) {
+        const char* arquivo = "dados.txt"; //argv[1];
 
         printf("Lendo arquivo para BPE...\n"); fflush(stdout);
         ifstream arq(arquivo);
@@ -46,10 +47,7 @@ int main(int argc, char* argv[]) {
         string texto((istreambuf_iterator<char>(arq)), istreambuf_iterator<char>());
         arq.close();
 
-        // 4000 merges: tokens mais curtos -> menos tokens totais -> janelas
-        // cobrem mais conteúdo; vocab menor reduz parâmetros na camada de
-        // projeção (dim×vocab) que é a maior do modelo
-        treinador.treinar({texto}, 4000);
+        treinador.treinar({texto}, 2000);
         tok = new TokenizadorBPE(treinador.merges);
         tok->construirVocab({texto});
 
@@ -57,12 +55,7 @@ int main(int argc, char* argv[]) {
 
         treinador.salvar("merges.txt");
 
-        // dim=64  dimAtencao=128  blocos=2  seqMax=256
-        // ~4x mais rápido que (128,256,4,512); adequado para 1.8MB
-        // parâmetros ≈ dim*vocab*2 + blocos*(4*dim² + 2*dim*dimAtencao + ...) 
-        // com vocab≈8k: embedding≈512k, projeção≈512k, blocos≈2*(4*64²+...)≈200k
-        // total ≈ 1.2M params suficiente
-        modelo = new Modelo(*tok, 64, 128, 2, 256, 0, "relu", 3e-4f, 1, 500);
+        modelo = new Modelo(*tok, 64, 128/2, 2, 256/2, 0, "relu", 3e-4f, 1, 500);
 
         printf("[Modelo]: %zu parâmetros\n", modelo->numParametros());
 
@@ -70,19 +63,17 @@ int main(int argc, char* argv[]) {
             arquivo,
             /*epocas=*/1,
             /*janela=*/256,
-            /*passo=*/128, // sobreposição 50%
-            /*aquecimento=*/200, // proporcional ao total de janelas
+            /*passo=*/128/2,
+            /*aquecimento=*/200,
             /*taxaMin=*/1e-5f,
             /*salvaDir=*/"salvas",
-            /*salvaACada=*/200, // checkpoint a cada 200 janelas
-            /*amostraACada=*/100, // monitora qualidade a cada 100 janelas
+            /*salvaACada=*/200,
+            /*amostraACada=*/100,
             /*logACadaJanela=*/1
         );
-        // refinamento com corpus de diálogo
+        // refinamento com corpus de dialogo
         auto corpus = corpusRefinar();
-        tok->construirVocab(corpus);
-        modelo->refinar(corpus, 10, 1e-4f, 50, "salvas");
-
+        modelo->refinar(corpus, 50, 1e-4f, 50, "salvas");
     } else {
         printf("Treinando com corpus embutido... "); fflush(stdout);
         auto corpus = corpusRefinar();
@@ -93,12 +84,12 @@ int main(int argc, char* argv[]) {
         modelo->treinar(corpus);
         printf("pronto\n");
     }
-
     printf("temp=%.2f gen=%d\n\n", temp, max_gen);
     printf("=== MODO INTERATIVO ===\n");
     printf("Comandos: /temp <f>  /gen <n>  /salvar <dir>  /carregar <dir>  /sair\n\n");
 
     char linha[1024];
+    string historico = "";
     while(true) {
         printf("[Você]: ");
         fflush(stdout);
@@ -131,10 +122,9 @@ int main(int argc, char* argv[]) {
             printf("carregado de %s\n", cmd.substr(10).c_str());
             continue;
         }
-
-        printf("%s\n\n", modelo->gerar(cmd, max_gen, temp).c_str());
+        historico += "<|usr|>: " + cmd + "\n<|alva|>: ";
+        printf("%s\n\n", modelo->gerar(historico, max_gen, temp).c_str());
     }
-
     delete modelo;
     delete tok;
     return 0;

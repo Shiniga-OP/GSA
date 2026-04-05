@@ -190,6 +190,7 @@ public:
                 
                 vector<int> entrada(tokens.begin() + ini, tokens.begin() + fim);
                 vector<int> alvo(tokens.begin() + ini + 1, tokens.begin() + fim + 1);
+                alvo.back() = idFim;
                 
                 float taxaAtual = _agendar(passoGlobal, totalPassos, aquecimentoPassos, taxa, taxaMin);
                 
@@ -290,7 +291,8 @@ public:
                 const auto& seq = seqs[s];
                 vector<int> entrada(seq.begin(), seq.end() - 1);
                 vector<int> alvo(seq.begin() + 1, seq.end());
-
+                alvo.back() = idFim;
+                
                 float taxaAtual = _agendar(passoGlobal, totalPassos, aquecimentoPassos, taxaFt, taxaFt * 0.1f);
                 float p = treinarLote(entrada, alvo, taxaAtual);
                 perdaEpoca += p;
@@ -356,9 +358,13 @@ public:
     string gerar(const string& entrada, size_t maxNovos=64, float temp=1.0f) {
         vector<int> ids = tok.codificar(entrada);
         ids.insert(ids.begin(), idAlmo);
+        size_t nEntrada = ids.size();
         vector<int> res = gerarVetores(ids, maxNovos, temp);
         vector<int> limpo;
-        for(int id : res) if(id != idAlmo && id != idFim) limpo.push_back(id);
+        for(size_t i = nEntrada; i < res.size(); i++) {
+            if(res[i] == idFim) break;
+            limpo.push_back(res[i]);
+        }
         return tok.decodificar(limpo);
     }
 
