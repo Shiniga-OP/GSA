@@ -3,32 +3,38 @@
 #include <math.h>
 
 inline int degrau(float x) {
-    return x > 0 ? 1: 0;
+    return x > 0 ? 1 : 0;
 }
 
 inline float sigmoid(float x) {
     return 1 / (1 + exp(-x));
 }
-inline float derivadaSigmoid(float y) {
-    return y * (1 - y);
+inline float derivadaSigmoid(float x) {
+    const float s = sigmoid(x);
+    return s * (1.0f - s);
 }
 
 inline float hardSigmoid(float x) {
-    return fmax(0, fmin(1,0.2 * x + 0.5));
+    return fmax(0, fmin(1, 0.2 * x + 0.5));
 }
 inline float derivadaHardSigmoid(float y) {
     return (y > -2.5 && y < 2.5) ? 0.2 : 0;
 }
 
 inline float tanhF(float x) {
-    return (float)tanh(x);
+    return tanhf(x);
 }
-inline float derivadaTanh(float y) {
-    return 1 - y * y;
+inline float derivadaTanh(float x) {
+    const float t = tanhf(x);
+    return 1.0f - t * t;
 }
 
 inline float ReLU(float x) {
-    return fmax(0,x);
+    return fmax(0, x);
+}
+
+inline float derivadaReLU(float x) {
+    return x > 0.0f ? 1.0f : 0.0f;
 }
 
 inline float leakyReLU(float x) {
@@ -41,9 +47,9 @@ inline float derivadaLeakyReLU(float y) {
 inline float softsign(float x) {
     return x / (1 + abs(x));
 }
-inline float derivadaSoftsign(float y) {
-    const float denom = 1 + abs(y);
-    return 1 / (denom * denom);
+inline float derivadaSoftsign(float x) {
+    const float denom = 1 + fabsf(x);
+    return 1.0f / (denom * denom);
 }
 
 inline float softplus(float x) {
@@ -68,23 +74,25 @@ inline float derivadaHardSwish(float y) {
 inline float GELU(float x) {
     return 0.5 * x * (1 + tanh(sqrt(2 / M_PI) * (x + 0.044715 * pow(x, 3))));
 }
-inline float derivadaGELU(float x){
-   const float cdf = 0.5 * (1 + tanh(sqrt(2 / M_PI) * (x + 0.044715 * x * x * x)));
-   return cdf + x * (1 - cdf * cdf) * (0.5 * sqrt(2 / M_PI) * (1 + 3 * 0.044715 * x * x));
+inline float derivadaGELU(float x) {
+    const float c = 0.7978845608f; // sqrt(2/pi)
+    const float u = c * (x + 0.044715f * x * x * x);
+    const float th = tanhf(u);
+    return 0.5f*(1.0f+th) + 0.5f*x*(1.0f-th*th)*c*(1.0f+3.0f*0.044715f*x*x);
 }
 
-inline float ELU(float x, float alfa = 1.0) {
-    return x >= 0 ? x : alfa * (exp(x) - 1);
+inline float ELU(float x) {
+    return x >= 0 ? x : 1.0 * (exp(x) - 1);
 }
-inline float derivadaELU(float y, float alfa = 1.0) {
-    return y >= 0 ? 1 : ELU(y, alfa) + alfa;
+inline float derivadaELU(float x) {
+    return x >= 0 ? 1.0f : expf(x);
 }
 
-inline float SELU(float x, float alfa = 1.67326, float escala = 1.0507) {
-    return escala * (x >= 0 ? x : alfa * (exp(x) - 1));
+inline float SELU(float x) {
+    return 1.0507 * (x >= 0 ? x : 1.67326 * (exp(x) - 1));
 }
-inline float derivadaSELU(float y, float alfa = 1.67326, float escala = 1.0507) {
-    return escala * (y >= 0 ? 1 : alfa * exp(y));
+inline float derivadaSELU(float x) {
+    return x >= 0 ? 1.0507f : 1.0507f * 1.67326f * expf(x);
 }
 
 inline float SiLU(float x) {
@@ -103,8 +111,8 @@ inline float derivadaMish(float y) {
 inline float bentIdentity(float x){
     return (sqrt(x * x + 1) - 1) / 2 + x;
 }
-inline float derivadaBentIdentity(float y) {
-    return y / (2 * sqrt(y * y + 1)) + 1;
+inline float derivadaBentIdentity(float x) {
+    return x / (2.0f * sqrtf(x * x + 1.0f)) + 1.0f;
 }
 
 inline float gaussian(float x) {

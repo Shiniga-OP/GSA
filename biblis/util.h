@@ -8,8 +8,9 @@ static inline uint32_t _hash(const char* s, int tam);
 static inline int _tamUTF8(unsigned char c);
 
 // array dinamico simples
-struct VetorInt {
-    int* dados;
+template <typename T>
+struct Vetor {
+    T* dados;
     int tam;
     int cap;
 
@@ -25,16 +26,14 @@ struct VetorInt {
         tam = 0;
     }
 
-    void empurrar(int v) {
+    void empurrar(T v) {
         if(tam == cap) {
             cap = cap ? cap * 2 : 8;
-            dados = (int*)realloc(dados, cap * sizeof(int));
+            dados = (T*)realloc(dados, cap * sizeof(T));
         }
         dados[tam++] = v;
     }
-    int operator[](int i) const {
-        return dados[i];
-    }
+    T inline operator[](int i) const {return dados[i];}
 };
 
 // buffer plano de strings

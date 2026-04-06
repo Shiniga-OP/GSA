@@ -134,7 +134,7 @@ int main() {
             normEspacos(entrada, normBuf, sizeof(normBuf));
             esperado = normBuf;
         }
-        VetorInt ids; ids.iniciar();
+        Vetor<int> ids; ids.iniciar();
         tok2.codificar(entrada, tamEntrada, &ids);
 
         int tamDec;
@@ -176,7 +176,7 @@ int main() {
     // teste 8: texto longo(janela de pré-treino)
     printf("=== Texto longo(primeiros 512 caracteres do corpus) ===\n");
     int tamJanela = tamTexto < 512 ? tamTexto : 512;
-    VetorInt idsLongo; idsLongo.iniciar();
+    Vetor<int> idsLongo; idsLongo.iniciar();
     tok2.codificar(texto, tamJanela, &idsLongo);
     printf("  512 caracteres -> %d tokens\n", idsLongo.tam);
     checar("gerou tokens do texto longo", idsLongo.tam > 0);
@@ -188,8 +188,8 @@ int main() {
     {
         const char* pal = "tokenização";
         int tam = (int)strlen(pal);
-        VetorInt r1; r1.iniciar();
-        VetorInt r2; r2.iniciar();
+        Vetor<int> r1; r1.iniciar();
+        Vetor<int> r2; r2.iniciar();
         tok2.codificar(pal, tam, &r1);
         tok2.codificar(pal, tam, &r2);
         bool igual = (r1.tam == r2.tam);
@@ -202,7 +202,7 @@ int main() {
     // teste 10: string vazia
     printf("=== Casos extremos ==\n");
     {
-        VetorInt r; r.iniciar();
+        Vetor<int> r; r.iniciar();
         tok2.codificar("", 0, &r);
         checar("string vazia -> 0 ids", r.tam == 0);
         r.liberar();

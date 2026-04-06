@@ -223,7 +223,7 @@ public:
             i += t;
         }
         VetorStr tokens; tokens.iniciar();
-        VetorInt resultado; resultado.iniciar();
+        Vetor<int> resultado; resultado.iniciar();
         _encode(texto, tamTexto, &tokens);
         for(int k = 0; k < tokens.tam; k++) {
             int tTam;
@@ -237,7 +237,7 @@ public:
         printf("Vocabulário construído: %d tokens\n", proximoId);
     }
 
-    void codificar(const char* texto, int tamTexto, VetorInt* saida) {
+    void codificar(const char* texto, int tamTexto, Vetor<int>* saida) {
         saida->limpar();
         if(tamTexto == 0) return;
         VetorStr tokens; tokens.iniciar();
