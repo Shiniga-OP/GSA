@@ -39,3 +39,16 @@ static inline void iniConstante(float* pesos, int n, float valor) {
         pesos[i] = valor;
     }
 }
+
+// normal via Box-Muller
+static inline float _normal() {
+    float u1 = _uniforme() + 1e-7f;
+    float u2 = _uniforme();
+    return sqrtf(-2.0f * logf(u1)) * cosf(2.0f * 3.14159265f * u2);
+}
+
+static inline void iniNormal(float* pesos, int n, float media, float desvio) {
+    for(int i = 0; i < n; i++) {
+        pesos[i] = media + desvio * _normal();
+    }
+}
