@@ -40,7 +40,7 @@ int main() {
     // teste 2: treina BPE
     printf("=== Treinando BPE (1000 merges) ===\n");
     TreinadorBPE treinador;
-    treinador.treinar(texto, tamTexto, 1000);
+    treinador.treinar(texto, tamTexto, 4000);
     printf("\n");
 
     // teste 3: salva e recarrega merges

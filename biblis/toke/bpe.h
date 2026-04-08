@@ -714,7 +714,6 @@ struct TreinadorBPE {
             int freq;
             ListaTokens lista;
         };
-
         EntradaVocab* vocab = (EntradaVocab*)malloc(nPalavras * sizeof(EntradaVocab));
         int vIdc = 0;
 
@@ -744,9 +743,9 @@ struct TreinadorBPE {
                 int t = _tamUTF8((unsigned char)pal[j]);
                 if(j + t > tamPal) t = tamPal - j;
                 int idc = ev.lista.alocarNo();
-                ev.lista.nos[idc].pos  = j;
-                ev.lista.nos[idc].tam  = t;
-                ev.lista.nos[idc].ant  = prev;
+                ev.lista.nos[idc].pos = j;
+                ev.lista.nos[idc].tam = t;
+                ev.lista.nos[idc].ant = prev;
                 ev.lista.nos[idc].prox = -1;
                 if(prev >= 0) ev.lista.nos[prev].prox = idc;
                 else ev.lista.cabeca = idc;
@@ -754,7 +753,6 @@ struct TreinadorBPE {
                 j += t;
             }
         }
-
         // 3. indice invertido de pares
         int capArrPares = 8192;
         ListaOcorr* arrPares = (ListaOcorr*)malloc(capArrPares * sizeof(ListaOcorr));
@@ -800,10 +798,14 @@ struct TreinadorBPE {
 
             // novo par
             if(nArrPares == capArrPares) {
+                int _velha = capArrPares;
                 capArrPares *= 2;
                 arrPares = (ListaOcorr*)realloc(arrPares, capArrPares * sizeof(ListaOcorr));
                 freqPar = (int*)realloc(freqPar, capArrPares * sizeof(int));
-                freqPar[nArrPares] = 0;
+                for(int _i = _velha; _i < capArrPares; _i++) {
+                    arrPares[_i].iniciar();
+                    freqPar[_i] = 0;
+                }
             }
             int idc = nArrPares++;
             arrPares[idc].iniciar();
@@ -836,7 +838,6 @@ struct TreinadorBPE {
                 heap.empurrar({freqPar[i], i});
             }
         }
-
         // 5. loop principal de merges
         for(int iter = 0; iter < maxMerges; iter++) {
             // descarta nós economicos desatualizados
@@ -852,7 +853,7 @@ struct TreinadorBPE {
             int freqMelhor = melhor.freq;
 
             // recupera chave "a b" do MapaStrInt (busca linear — ocorre maxMerges vezes)
-            const char* chaveM    = nullptr;
+            const char* chaveM = nullptr;
             int tamChaveM = 0;
             for(int i = 0; i < idcPar.capacidade; i++) {
                 if(!idcPar.slots[i].chave) continue;
@@ -878,11 +879,15 @@ struct TreinadorBPE {
             numMerges++;
 
             // aplica merge: atualiza apenas os vizinhos afetados
-            ListaOcorr& ocorrs = arrPares[idcMelhor];
+            // copia os dados de ocorrs antes do loop: _obterOuCriarPar pode
+            // realocar arrPares, invalidando qualquer referencia/ponteiro nele
+            int nOcorrs = arrPares[idcMelhor].tam;
+            OcorrPar* ocorrsCopia = (OcorrPar*)malloc(nOcorrs * sizeof(OcorrPar));
+            memcpy(ocorrsCopia, arrPares[idcMelhor].dados, nOcorrs * sizeof(OcorrPar));
 
-            for(int oi = 0; oi < ocorrs.tam; oi++) {
-                int v = ocorrs.dados[oi].idcVocab;
-                int nEsq = ocorrs.dados[oi].idcNoEsq;
+            for(int oi = 0; oi < nOcorrs; oi++) {
+                int v = ocorrsCopia[oi].idcVocab;
+                int nEsq = ocorrsCopia[oi].idcNoEsq;
 
                 EntradaVocab& ev = vocab[v];
                 NoLista* nos = ev.lista.nos;
@@ -910,7 +915,6 @@ struct TreinadorBPE {
                     if(freqPar[ip] < 0) freqPar[ip] = 0;
                     // heap atualiza economicamente: não precisa fazer nada aqui
                 }
-
                 // remove par(dir, prox) do indice
                 if(nProx >= 0) {
                     int ip = _obterOuCriarPar(
@@ -935,7 +939,6 @@ struct TreinadorBPE {
                     freqPar[ip] += ev.freq;
                     heap.empurrar({freqPar[ip], ip});
                 }
-
                 // adiciona par(esq_fundido, prox)
                 if(nProx >= 0) {
                     int ip = _obterOuCriarPar(
@@ -947,8 +950,9 @@ struct TreinadorBPE {
                     heap.empurrar({freqPar[ip], ip});
                 }
             }
+            free(ocorrsCopia);
             // esvazia ocorrencias do par aplicado(ja fundido em tudo)
-            ocorrs.limpar();
+            arrPares[idcMelhor].limpar();
             freqPar[idcMelhor] = 0;
         }
         // libera tudo

@@ -80,14 +80,7 @@ struct Embedding : Camada {
             const float* linha = tabela + id * dim;
             float* dest = saida + t * dim;
             // copia com desenrolamento x4
-            int k = 0;
-            for(; k <= dim - 4; k += 4) {
-                dest[k] = linha[k];
-                dest[k+1] = linha[k+1];
-                dest[k+2] = linha[k+2];
-                dest[k+3] = linha[k+3];
-            }
-            for(; k < dim; k++) dest[k] = linha[k];
+            memcpy(dest, linha, dim * sizeof(float));
         }
     }
 
