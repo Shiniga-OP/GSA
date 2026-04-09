@@ -1,7 +1,4 @@
 // teste_norm.cpp
-// Testes intensivos da Norm (Layer Normalization).
-// Compilar: clang++ -O2 -std=c++11 -o teste_norm teste_norm.cpp -lm
-// Todos os testes imprimem PASSOU ou FALHOU com diagnóstico.
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>

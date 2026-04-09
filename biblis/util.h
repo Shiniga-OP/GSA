@@ -183,3 +183,32 @@ static inline int _tamUTF8(unsigned char c) {
     if((c & 0xF8) == 0xF0) return 4;
     return 1;
 }
+
+// vetores:
+static inline void vetorAleatorio(float* v, int n, float escala = 0.5f) {
+    for(int i = 0; i < n; i++) {
+        v[i] = ((float)rand() / RAND_MAXf * 2.0f - 1.0f) * escala;
+    }
+}
+
+static inline float normaDif(const float* a, const float* b, int n) {
+    float s = 0.0f;
+    for(int i = 0; i < n; i++) {
+        float d = a[i]-b[i];
+        s += d*d;
+    }
+    return sqrtf(s);
+}
+
+static inline float norma(const float* a, int n) {
+    float s = 0.0f;
+    for(int i = 0; i < n; i++) s += a[i]*a[i];
+    return sqrtf(s);
+}
+
+// perda L2: soma(saida^2) / 2
+static inline float perdaL2(const float* v, int n) {
+    float s = 0.0f;
+    for(int i = 0; i < n; i++) s += v[i]*v[i];
+    return s * 0.5f;
+}
