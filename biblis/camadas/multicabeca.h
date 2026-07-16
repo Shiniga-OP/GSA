@@ -80,6 +80,7 @@ struct MultiCabeca : Camada {
         saida = (float*)malloc(seqMax * dim * sizeof(float));
 
         seqAtual = 0;
+        grupos = 4;
         inicializar("xavier");
     }
 

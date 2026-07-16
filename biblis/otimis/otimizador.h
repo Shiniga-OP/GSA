@@ -5,17 +5,12 @@
 #include <math.h>
 #include "../camadas/camada.h"
 
-// utilitários internos
-// numero total de parametros em um vetor de camadas
 static inline int _totalParams(Camada** camadas, int nCamadas) {
     int total = 0;
     for(int c = 0; c < nCamadas; c++) total += camadas[c]->numParams();
     return total;
 }
 
-// coleta todos os ponteiros de params/grads em arrays planos
-// retorna numero de grupos(pares ptr+tam)
-// maxGrupos deve ser >= 2*nCamadas (cada camada tem no maximo 2 grupos: pesos, bias)
 static inline int _coletarPtrs(
     Camada** camadas, int nCamadas,
     float** pPtrs, int* pTams,
@@ -25,16 +20,13 @@ static inline int _coletarPtrs(
     int ng = 0;
     for(int c = 0; c < nCamadas && ng < maxGrupos; c++) {
         int np = camadas[c]->numParams();
-        if (np == 0) continue;
-        // cada camada expõe no máximo 2 grupos(pesos, bias)
-        float* tmpP[2]; int tmpTP[2];
-        float* tmpG[2]; int tmpTG[2];
+        if(np == 0) continue;
+        float* tmpP[16]; int tmpTP[16];
+        float* tmpG[16]; int tmpTG[16];
         camadas[c]->params(tmpP, tmpTP);
         camadas[c]->gradParams(tmpG, tmpTG);
-        // quantos grupos esta camada tem?
-        // numParams() = soma dos tams, descobre quantos grupos contando
         int soma = 0, gi = 0;
-        for(gi = 0; gi < 2 && soma < np; gi++) {
+        for(gi = 0; gi < camadas[c]->grupos && soma < np; gi++) {
             pPtrs[ng] = tmpP[gi];
             pTams[ng] = tmpTP[gi];
             gPtrs[ng] = tmpG[gi];
@@ -46,7 +38,6 @@ static inline int _coletarPtrs(
     return ng;
 }
 
-// agendadores de taxa de aprendizado
 struct AgendadorCosseno {
     float taxaMax;
     float taxaMin;
@@ -55,7 +46,6 @@ struct AgendadorCosseno {
 
     float calcular(int passo) const {
         if(passo < aquecimento) {
-            // linear aquecimento
             return taxaMax * ((float)passo / (float)(aquecimento > 0 ? aquecimento : 1));
         }
         int s = passo - aquecimento;
@@ -67,8 +57,8 @@ struct AgendadorCosseno {
 
 struct AgendadorDegrau {
     float taxaInicial;
-    float fator; // multiplica taxa a cada 'passo'
-    int intervalo; // passos entre cada redução
+    float fator;
+    int intervalo;
 
     float calcular(int passo) const {
         int n = passo / (intervalo > 0 ? intervalo : 1);

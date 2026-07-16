@@ -1,4 +1,5 @@
 // biblis/util.h
+#pragma once
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -6,6 +7,7 @@
 
 static inline uint32_t _hash(const char* s, int tam);
 static inline int _tamUTF8(unsigned char c);
+static const float RAND_MAXf = (float)RAND_MAX;
 
 // array dinamico simples
 template <typename T>

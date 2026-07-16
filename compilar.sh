@@ -5,4 +5,4 @@ if [ ! -d "bin" ]; then
     mkdir bin
 fi
 $COMPILADOR $ARQ.cpp -o bin/$ARQ $OTIMI -march=native
-time ./bin/$ARQ
+./bin/$ARQ

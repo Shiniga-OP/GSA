@@ -31,6 +31,7 @@ struct Grad {
 };
 
 struct Camada {
+    int grupos = 2;
     float (*ativa)(float) = nullptr;
     float (*derivada)(float) = nullptr;
 

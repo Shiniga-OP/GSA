@@ -2,8 +2,7 @@
 #pragma once
 #include <math.h>
 #include <stdlib.h>
-
-static const float RAND_MAXf = (float)RAND_MAX;
+#include "util.h"
 
 static inline float _uniforme() {
     return (float)rand() / RAND_MAXf;

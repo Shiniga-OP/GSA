@@ -12,10 +12,10 @@
 //     entrada: int* reinterpretado como float*: sequencia de tamSeq ids
 //     saida: float[tamSeq * dim], vetores correspondentes(copia)
 
-//   retroprop(gradSaida, gradEntrada)
-//     gradSaida: float[tamSeq * dim], gradiente vindo de cima
-//     gradEntrada: ignorado(ids não tem gradiente)
-//     acumula em gradTab via dispersão-adição
+// retroprop(gradSaida, gradEntrada)
+//  gradSaida: float[tamSeq * dim], gradiente vindo de cima
+//  gradEntrada: ignorado(ids não tem gradiente)
+//  acumula em gradTab via dispersão-adição
 
 // tamSeq deve ser definido antes de cada prop()/retroprop() via defSeq()
 // os ids da última prop() são gravados em ultIds[]
@@ -39,6 +39,7 @@ struct Embedding : Camada {
         tabela = (float*)malloc(vocab * dim * sizeof(float));
         gradTab = (float*)calloc(vocab * dim, sizeof(float));
         ultIds = (int*)malloc(tamSeqMax * sizeof(int));
+        grupos = 1;
         inicializar("normal");
     }
 

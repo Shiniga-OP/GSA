@@ -4,4 +4,4 @@ cp -rf $CASA/pacotes/gsa/ .
 cp g.sh $CASA/pacotes/gsa/
 cd gsa
 chmod +x compilar.sh
-./compilar.sh $ARQ $OTIMI
+sh compilar.sh $ARQ $OTIMI
