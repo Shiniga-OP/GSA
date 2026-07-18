@@ -56,6 +56,21 @@ struct AdamW {
 
     void att() {
         passo++;
+
+        // clipping de norma global do gradiente: prevent divergencia por
+        // gradientes ocasionalmente grandes (comum com batch pequeno).
+        // norma computada sobre TODOS os parametros, escala aplicada uniformemente.
+        const float normaMax = 1.0f;
+        double somaSq = 0.0;
+        for(int g = 0; g < nGrupos; g++) {
+            float* gd = gPtrs[g];
+            int n = pTams[g];
+            for(int k = 0; k < n; k++) somaSq += (double)gd[k] * (double)gd[k];
+        }
+        float normaGlobal = sqrtf((float)somaSq);
+        float escalaClip = 1.0f;
+        if(normaGlobal > normaMax) escalaClip = normaMax / (normaGlobal + 1e-6f);
+
         // bias correção: calculado uma vez, fora do loop
         float bc1 = 1.0f - powf(beta1, (float)passo);
         float bc2 = 1.0f - powf(beta2, (float)passo);
@@ -86,9 +101,9 @@ struct AdamW {
                 p[k+6] *= pdFator;
                 p[k+7] *= pdFator;
 
-                // m = beta1*m + (1-beta1)*g
-                float g0=gd[k], g1=gd[k+1], g2=gd[k+2], g3=gd[k+3];
-                float g4=gd[k+4], g5=gd[k+5], g6=gd[k+6], g7=gd[k+7];
+                // m = beta1*m + (1-beta1)*g (g escalado pelo clip global)
+                float g0=gd[k]*escalaClip, g1=gd[k+1]*escalaClip, g2=gd[k+2]*escalaClip, g3=gd[k+3]*escalaClip;
+                float g4=gd[k+4]*escalaClip, g5=gd[k+5]*escalaClip, g6=gd[k+6]*escalaClip, g7=gd[k+7]*escalaClip;
                 float ob1 = 1.0f - beta1;
                 mg[k] = beta1*mg[k] + ob1*g0;
                 mg[k+1] = beta1*mg[k+1] + ob1*g1;
@@ -111,7 +126,6 @@ struct AdamW {
                 vg[k+7] = beta2*vg[k+7] + ob2*g7*g7;
 
                 // p -= taxaCorr * m / (sqrt(v) + eps)
-                // sem divisão interna: 1/(sqrt(v)+eps) via multiplicação
                 p[k] -= taxaCorr * mg[k] / (sqrtf(vg[k]) + eps);
                 p[k+1] -= taxaCorr * mg[k+1] / (sqrtf(vg[k+1]) + eps);
                 p[k+2] -= taxaCorr * mg[k+2] / (sqrtf(vg[k+2]) + eps);
@@ -125,7 +139,7 @@ struct AdamW {
             float ob1 = 1.0f - beta1, ob2 = 1.0f - beta2;
             for(; k < n; k++) {
                 p[k] *= pdFator;
-                float gk = gd[k];
+                float gk = gd[k] * escalaClip;
                 mg[k] = beta1*mg[k] + ob1*gk;
                 vg[k] = beta2*vg[k] + ob2*gk*gk;
                 p[k] -= taxaCorr * mg[k] / (sqrtf(vg[k]) + eps);
