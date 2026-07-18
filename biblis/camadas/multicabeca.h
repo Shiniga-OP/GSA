@@ -234,30 +234,32 @@ struct MultiCabeca : Camada {
             float* Pc = P + c * seq * seq;
 
             // A[q,k] = escala * dot(Qr[q,c*dCab..], Kr[k,c*dCab..])
+            // mascara causal: q so pode atender a k <= q (nunca o futuro)
             for(int q = 0; q < seq; q++) {
                 const float* qv = Qr + q * dim + c * dCab;
                 float mx = -1e30f;
-                for(int k = 0; k < seq; k++) {
+                for(int k = 0; k <= q; k++) {
                     const float* kv = Kr + k * dim + c * dCab;
                     float dot = 0.0f;
                     for(int d = 0; d < dCab; d++) dot += qv[d] * kv[d];
                     Ac[q * seq + k] = dot * escala;
                     if(Ac[q * seq + k] > mx) mx = Ac[q * seq + k];
                 }
-                // softmax estavel
+                // softmax estavel, somente sobre k <= q
                 float soma = 0.0f;
-                for(int k = 0; k < seq; k++) {
+                for(int k = 0; k <= q; k++) {
                     Pc[q * seq + k] = expf(Ac[q * seq + k] - mx);
                     soma += Pc[q * seq + k];
                 }
                 float inv = 1.0f / soma;
-                for(int k = 0; k < seq; k++) Pc[q * seq + k] *= inv;
+                for(int k = 0; k <= q; k++) Pc[q * seq + k] *= inv;
+                for(int k = q + 1; k < seq; k++) Pc[q * seq + k] = 0.0f; // futuro: peso zero
             }
-            // ctx[q, c*dCab..] = soma_k P[q,k] * V[k, h*dCab..]
+            // ctx[q, c*dCab..] = soma_{k<=q} P[q,k] * V[k, h*dCab..]
             for(int q = 0; q < seq; q++) {
                 float* cv = ctx + q * dim + c * dCab;
                 const float* pv = Pc + q * seq;
-                for(int k = 0; k < seq; k++) {
+                for(int k = 0; k <= q; k++) {
                     const float* vv = V + k * dim + c * dCab;
                     float p = pv[k];
                     for(int d = 0; d < dCab; d++) cv[d] += p * vv[d];

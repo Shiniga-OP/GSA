@@ -11,7 +11,9 @@
 #include "biblis/toke/fabrica_dados.h"
 
 #define TAM_BATCH 8
-#define PASSOS_ENTRE_VALIDACAO 200
+#define PASSOS_ENTRE_VALIDACAO 100
+#define PASSOS_ENTRE_AMOSTRA 100
+#define TAM_AMOSTRA 40
 #define DIM 128
 #define N_CAB 4
 #define DIM_FF 512
@@ -20,6 +22,7 @@
 #define TAXA_MAX 3e-4f
 #define TAXA_MIN 3e-5f
 #define PASSOS_AQUECIMENTO 100
+#define PASSOS_TREINO_DEFAULT 2000
 
 // ---------------------------------------------------------------------------
 // leitura dos binarios de dados de treino/validacao (formato de fabrica_dados.h)
@@ -140,9 +143,38 @@ static float avaliarValidacao(Modelo* modelo, DadosTreino* val, int maxSequencia
     return somaPerda / (float)n;
 }
 
+// ---------------------------------------------------------------------------
+// gera uma amostra curta de texto durante o treino, pra acompanhar progresso
+// real (nao so o numero da perda). Restaura defSeq(SEQ_MAX) ao final, ja que
+// gerarGuloso muda seqAtual internamente.
+// ---------------------------------------------------------------------------
+static void gerarAmostra(Modelo* modelo, TokenizadorBPE* tokenizador, const char* prompt, int passo) {
+    Vetor<int> idsPrompt; idsPrompt.iniciar();
+    tokenizador->codificar(prompt, (int)strlen(prompt), &idsPrompt);
+
+    if(idsPrompt.tam == 0) {
+        printf(">>> [amostra passo %d] prompt vazio, pulando\n", passo);
+        idsPrompt.liberar();
+        return;
+    }
+
+    int* gerados = (int*)malloc(TAM_AMOSTRA * sizeof(int));
+    modelo->gerarGuloso(idsPrompt.dados, idsPrompt.tam, gerados, TAM_AMOSTRA);
+
+    int tamTexto;
+    char* texto = tokenizador->decodificar(gerados, TAM_AMOSTRA, &tamTexto);
+    printf(">>> [amostra passo %d] \"%s%s\"\n", passo, prompt, texto);
+
+    free(texto);
+    free(gerados);
+    idsPrompt.liberar();
+
+    modelo->defSeq(SEQ_MAX); // gerarGuloso mudou seqAtual, restaura pro loop de treino
+}
+
 int main(int argc, char** argv) {
     if(argc < 6) {
-        printf("Uso: %s treino.bin validacao.bin merges.txt vocab.bin checkpoint.bin\n", argv[0]);
+        printf("Uso: %s treino.bin validacao.bin merges.txt vocab.bin checkpoint.bin [maxPassos]\n", argv[0]);
         return 1;
     }
     const char* caminhoTreino = argv[1];
@@ -150,6 +182,7 @@ int main(int argc, char** argv) {
     const char* caminhoMerges = argv[3];
     const char* caminhoVocab = argv[4];
     const char* caminhoCheckpoint = argv[5];
+    int maxPassos = argc >= 7 ? atoi(argv[6]) : PASSOS_TREINO_DEFAULT;
 
     char caminhoMelhor[512];
     snprintf(caminhoMelhor, sizeof(caminhoMelhor), "%s.melhor", caminhoCheckpoint);
@@ -189,8 +222,9 @@ int main(int argc, char** argv) {
     int entrada[SEQ_MAX], alvo[SEQ_MAX];
 
     int totalPassosBatch = treino.numSequencias / TAM_BATCH;
-    printf("Iniciando treino: %d sequencias, batch=%d, %d passos por epoca\n",
-           treino.numSequencias, TAM_BATCH, totalPassosBatch);
+    if(maxPassos < totalPassosBatch) totalPassosBatch = maxPassos;
+    printf("Iniciando treino: %d sequencias, batch=%d, %d passos (limite=%d)\n",
+           treino.numSequencias, TAM_BATCH, totalPassosBatch, maxPassos);
 
     AgendadorCosseno agendador;
     agendador.taxaMax = TAXA_MAX;
@@ -239,6 +273,10 @@ int main(int argc, char** argv) {
             }
 
             modelo.defSeq(SEQ_MAX); // avaliarValidacao muda seqAtual, restaura pro batch
+        }
+
+        if(passo % PASSOS_ENTRE_AMOSTRA == 0 && passo > 0) {
+            gerarAmostra(&modelo, &tokenizador, "No princípio", passo);
         }
     }
 
