@@ -26,7 +26,11 @@ static inline int _coletarPtrs(
         camadas[c]->params(tmpP, tmpTP);
         camadas[c]->gradParams(tmpG, tmpTG);
         int soma = 0, gi = 0;
-        for(gi = 0; gi < camadas[c]->grupos && soma < np; gi++) {
+        // checagem ng < maxGrupos tambem aqui: uma unica camada pode ter varios
+        // grupos (ex: BlocoTransformer tem 12), entao o limite podia estourar
+        // mesmo com a condicao do loop externo satisfeita (bug que causava
+        // corrupcao de memoria silenciosa com nCamadas grande)
+        for(gi = 0; gi < camadas[c]->grupos && soma < np && ng < maxGrupos; gi++) {
             pPtrs[ng] = tmpP[gi];
             pTams[ng] = tmpTP[gi];
             gPtrs[ng] = tmpG[gi];

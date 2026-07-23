@@ -24,7 +24,7 @@ struct AdamW {
 
     // ponteiros e tamanhos dos grupos(coletados uma vez em inicio)
     // maximo 64 grupos(32 camadas × 2)
-    static const int MAX_GRUPOS = 64;
+    static const int MAX_GRUPOS = 256; // era 64: estourava com poucas camadas (12 grupos/bloco transformer)
     float* pPtrs[MAX_GRUPOS];
     float* gPtrs[MAX_GRUPOS];
     int pTams[MAX_GRUPOS];

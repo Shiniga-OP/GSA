@@ -107,11 +107,10 @@ struct Modelo {
     void zerarGrad() {
         for(int c = 0; c < totalCamadas; c++) todasCamadas[c]->zerarGrad();
     }
-    // =========================================================================
-    // prop: ids[seqAtual] (int*, reinterpretado como float* pra bater com Embedding)
+
+    // prop: ids[seqAtual](int*, reinterpretado como float* pra bater com Embedding)
     //       -> logits[seqAtual * vocab]
     // chamador deve ter chamado defSeq(seq) antes
-    // =========================================================================
     void prop(const int* ids) {
         int seq = seqAtual;
 
@@ -125,12 +124,10 @@ struct Modelo {
             saida->prop(ativ[nCamadas] + t * dim, logits + t * vocab);
         }
     }
-    // =========================================================================
     // perdaCrossEntropy: aplica softmax sobre logits[t] e calcula -log(p[alvo[t]])
     // alvos[seq]: id do token esperado em cada posicao
-    // preenche gradLogits (dL/dlogits) para uso em retroprop()
+    // preenche gradLogits(dL/dlogits) para uso em retroprop()
     // retorna perda media sobre a sequencia
-    // =========================================================================
     float perdaCrossEntropy(const int* alvos) {
         int seq = seqAtual;
         float perdaTotal = 0.0f;
@@ -163,10 +160,8 @@ struct Modelo {
         }
         return perdaTotal / (float)seq;
     }
-    // =========================================================================
     // retroprop: caminho inverso completo, a partir de gradLogits (ja preenchido
     // por perdaCrossEntropy). Acumula gradientes em todas as camadas.
-    // =========================================================================
     void retroprop() {
         int seq = seqAtual;
 
@@ -181,8 +176,7 @@ struct Modelo {
         // grad atraves do embedding (gradEntrada ignorado: ids nao tem gradiente)
         emb->retroprop(gradAtiv[0], nullptr);
     }
-    // =========================================================================
-    // gerar: sampling autoregressivo guloso (greedy) a partir de um entrada de ids.
+    // gerar: sampling autoregressivo guloso a partir de um entrada de ids.
     // entrada[tamEntrada] -> escreve tamGerar novos ids em saidaIds (nao inclui o entrada)
     // usa apenas prop(), sem retroprop. respeita seqMax(janela deslizante simples).
     // =========================================================================
