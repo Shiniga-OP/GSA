@@ -1,5 +1,6 @@
 // biblis/util.h
 #pragma once
+#include "math.h"
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -213,4 +214,40 @@ static inline float perdaL2(const float* v, int n) {
     float s = 0.0f;
     for(int i = 0; i < n; i++) s += v[i]*v[i];
     return s * 0.5f;
+}
+
+// perda entropia cruzada: aplica softmax sobre logits[t] e calcula -log(p[alvo[t]])
+// alvos[seq]: id do token esperado em cada posicao
+// preenche gradLogits(dL/dlogits) para uso em retroprop()
+// retorna perda media sobre a sequencia
+static inline float perdaEntropiaCruzada(const float* logits, float* gradLogits, const int* alvos, int seq, int vocab) {
+    float perdaTotal = 0.0f;
+
+    for(int t = 0; t < seq; t++) {
+        const float* lg = logits + t * vocab;
+        float* gl = gradLogits + t * vocab;
+
+        // softmax estavel
+        float mx = lg[0];
+        for(int v = 1; v < vocab; v++) {
+            if(lg[v] > mx) mx = lg[v];
+        }
+        float soma = 0.0f;
+        for(int v = 0; v < vocab; v++) {
+            gl[v] = expf(lg[v] - mx); // reaproveita gl como buffer temporario de exp
+            soma += gl[v];
+        }
+        float invSoma = 1.0f / soma;
+        int alvo = alvos[t];
+
+        for(int v = 0; v < vocab; v++) {
+            float p = gl[v] * invSoma; // probabilidade softmax
+            gl[v] = p - (v == alvo ? 1.0f : 0.0f); // dL/dlogit = p - onehot
+        }
+        float pAlvo = expf(lg[alvo] - mx) * invSoma;
+        // clamp evita log(0) por erro de arredondamento
+        if(pAlvo < 1e-9f) pAlvo = 1e-9f;
+        perdaTotal += -logf(pAlvo);
+    }
+    return perdaTotal / (float)seq;
 }

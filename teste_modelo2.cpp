@@ -163,7 +163,7 @@ int main() {
                     alvo[i] = janelas[j][i + 1];
                 }
                 modelo.prop(entrada);
-                somaPerdaBatch += modelo.perdaCrossEntropy(alvo);
+                somaPerdaBatch += perdaEntropiaCruzada(modelo.logits, modelo.gradLogits, alvo, modelo.seqAtual, modelo.vocab);
                 modelo.retroprop();
                 contPerdas++;
             }

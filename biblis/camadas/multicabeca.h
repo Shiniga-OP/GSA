@@ -17,7 +17,6 @@
 // RoPE aplicado em Q e K por cabeça antes do produto escalar
 // softmax estavel(subtrai max por linha)
 // retroprop() recebe/devolve gradiente achatado [seq * dim]
-
 struct MultiCabeca : Camada {
     int dim;
     int nCab;
@@ -128,7 +127,6 @@ struct MultiCabeca : Camada {
             iniXavier(Po, dd, dim, dim);
         }
     }
-
     //  RoPE: rotaciona pares(x[2i], x[2i+1]) pelo angulo pos/10000^(2i/dCab)
     //  opera no local sobre vetor de dimensão dCab na posição pos
     static void rope(float* v, int pos, int dCab) {
@@ -142,7 +140,6 @@ struct MultiCabeca : Camada {
             v[2*i + 1] = x0 * s + x1 * c;
         }
     }
-
     // gradiente de RoPE: dL/d(entrada) dado dL/d(saida rotacionada)
     // rotação inversa = transposta da matriz de rotação = rotação por -theta
     static void ropeGrad(const float* gSai, float* gEnt, int pos, int dCab) {
@@ -157,7 +154,6 @@ struct MultiCabeca : Camada {
             gEnt[2*i + 1] = -g0 * s + g1 * c;
         }
     }
-
     // GEMM auxiliar: C += A * B(sem bias)
     // A: [M x K], B: [K x N], C: [M x N]
     static void gemm(const float* A_, const float* B_, float* C_,
@@ -172,7 +168,6 @@ struct MultiCabeca : Camada {
             }
         }
     }
-
     // prop(entrada, saida_saida)
     // entrada: [seq * dim](seq = seqAtual, definido externamente)
     // saida_: [seq * dim]
@@ -205,7 +200,9 @@ struct MultiCabeca : Camada {
                 float s = 0.0f;
                 const float* pl = Pk + j * dim;
                 const float* el = entrada + t * dim;
-                for(int i = 0; i < dim; i++) s += el[i] * pl[i];
+                for(int i = 0; i < dim; i++) {
+                    s += el[i] * pl[i];
+                }
                 K[t * dim + j] = s;
             }
         }
@@ -214,7 +211,9 @@ struct MultiCabeca : Camada {
                 float s = 0.0f;
                 const float* pl = Pv + j * dim;
                 const float* el = entrada + t * dim;
-                for(int i = 0; i < dim; i++) s += el[i] * pl[i];
+                for(int i = 0; i < dim; i++) {
+                    s += el[i] * pl[i];
+                }
                 V[t * dim + j] = s;
             }
         }
@@ -262,7 +261,9 @@ struct MultiCabeca : Camada {
                 for(int k = 0; k <= q; k++) {
                     const float* vv = V + k * dim + c * dCab;
                     float p = pv[k];
-                    for(int d = 0; d < dCab; d++) cv[d] += p * vv[d];
+                    for(int d = 0; d < dCab; d++) {
+                        cv[d] += p * vv[d];
+                    }
                 }
             }
         }
@@ -273,7 +274,9 @@ struct MultiCabeca : Camada {
                 float s = 0.0f;
                 const float* pl = Po + j * dim;
                 const float* cl = ctx + t * dim;
-                for(int i = 0; i < dim; i++) s += cl[i] * pl[i];
+                for(int i = 0; i < dim; i++) {
+                    s += cl[i] * pl[i];
+                }
                 saida_[t * dim + j] = s;
             }
         }

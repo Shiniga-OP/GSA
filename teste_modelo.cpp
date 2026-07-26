@@ -48,7 +48,7 @@ int main() {
     for(int passo = 0; passo < 5; passo++) {
         modelo.zerarGrad();
         modelo.prop(entrada);
-        float perda = modelo.perdaCrossEntropy(alvo);
+        float perda = perdaEntropiaCruzada(modelo.logits, modelo.gradLogits, alvo, modelo.seqAtual, modelo.vocab);
         modelo.retroprop();
         otim.att();
 
@@ -58,7 +58,7 @@ int main() {
 
     modelo.zerarGrad();
     modelo.prop(entrada);
-    float perdaDepois = modelo.perdaCrossEntropy(alvo);
+    float perdaDepois = perdaEntropiaCruzada(modelo.logits, modelo.gradLogits, alvo, modelo.seqAtual, modelo.vocab);
 
     bool perdaCaiu = perdaDepois < perdaAntes;
     bool perdaFinita = std::isfinite(perdaDepois);

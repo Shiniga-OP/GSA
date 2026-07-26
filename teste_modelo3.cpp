@@ -1,4 +1,4 @@
-// teste_pipeline.cpp
+// teste_modelo3.cpp
 // teste de pipeline completo: BPE -> Modelo -> treino AdamW -> GERACAO DE TEXTO
 // objetivo: ver o texto gerado em varios pontos do treino, nao so os numeros.
 // compilar na pasta mae, onde a pasta biblis/ fica ao lado deste arquivo:
@@ -169,7 +169,7 @@ int main() {
         modelo.defSeq(seq);
         modelo.zerarGrad();
         modelo.prop(idsEnt);
-        float perda = modelo.perdaCrossEntropy(idsAlvo);
+        float perda = perdaEntropiaCruzada(modelo.logits, modelo.gradLogits, idsAlvo, modelo.seqAtual, modelo.vocab);
         modelo.retroprop();
         otim.att();
 

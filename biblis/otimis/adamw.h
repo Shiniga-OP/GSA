@@ -57,19 +57,25 @@ struct AdamW {
     void att() {
         passo++;
 
-        // clipping de norma global do gradiente: prevent divergencia por
-        // gradientes ocasionalmente grandes (comum com batch pequeno).
-        // norma computada sobre TODOS os parametros, escala aplicada uniformemente.
+        // clipping de norma POR GRUPO (nao mais global): medido com dados reais
+        // (diag_grad.cpp), a Densa final (dim->vocab) tem norma de gradiente
+        // consistentemente 2-5x maior que embedding/atencao/FFN durante o
+        // treino inteiro. com clip GLOBAL, essa unica camada dominava a norma
+        // total e a escala resultante sufocava o aprendizado das outras
+        // camadas (que ja tinham gradiente bem menor), causando colapso de
+        // modo (a rede aprendia so a prever o token mais frequente). clipando
+        // cada grupo pela sua propria norma, nenhuma camada rouba a escala
+        // de atualizacao das demais.
         const float normaMax = 1.0f;
-        double somaSq = 0.0;
+        float escalasClip[MAX_GRUPOS];
         for(int g = 0; g < nGrupos; g++) {
             float* gd = gPtrs[g];
             int n = pTams[g];
+            double somaSq = 0.0;
             for(int k = 0; k < n; k++) somaSq += (double)gd[k] * (double)gd[k];
+            float normaGrupo = sqrtf((float)somaSq);
+            escalasClip[g] = (normaGrupo > normaMax) ? (normaMax / (normaGrupo + 1e-6f)) : 1.0f;
         }
-        float normaGlobal = sqrtf((float)somaSq);
-        float escalaClip = 1.0f;
-        if(normaGlobal > normaMax) escalaClip = normaMax / (normaGlobal + 1e-6f);
 
         // bias correção: calculado uma vez, fora do loop
         float bc1 = 1.0f - powf(beta1, (float)passo);
@@ -84,6 +90,7 @@ struct AdamW {
             float* __restrict__ mg = m + pos;
             float* __restrict__ vg = v + pos;
             int n = pTams[g];
+            float escalaClip = escalasClip[g];
 
             // decaimento peso desacoplado(AdamW): p *= (1 - taxa*pd)
             float pdFator = 1.0f - taxa * pd;
@@ -101,7 +108,7 @@ struct AdamW {
                 p[k+6] *= pdFator;
                 p[k+7] *= pdFator;
 
-                // m = beta1*m + (1-beta1)*g (g escalado pelo clip global)
+                // m = beta1*m + (1-beta1)*g (g escalado pelo clip do proprio grupo)
                 float g0=gd[k]*escalaClip, g1=gd[k+1]*escalaClip, g2=gd[k+2]*escalaClip, g3=gd[k+3]*escalaClip;
                 float g4=gd[k+4]*escalaClip, g5=gd[k+5]*escalaClip, g6=gd[k+6]*escalaClip, g7=gd[k+7]*escalaClip;
                 float ob1 = 1.0f - beta1;

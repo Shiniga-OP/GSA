@@ -70,8 +70,8 @@ struct BlocoTransformer : Camada {
         seqAtual = 1;
 
         mha = new MultiCabeca(dim, nCab_, seqMax);
-        ln1 = new Norm(dim);
-        ln2 = new Norm(dim);
+        ln1 = new Norm(dim, 1e-5f, seqMax);
+        ln2 = new Norm(dim, 1e-5f, seqMax);
         ff1 = new Densa(dim, dimFF, "gelu");
         ff2 = new Densa(dimFF, dim, ""); // sem ativação(linear)
 
@@ -128,6 +128,8 @@ struct BlocoTransformer : Camada {
 
         // --- bloco de atenção(Pre-LN) ---
         // LN1(x) -> bufLN1, por token(Norm opera sobre um vetor [dim] de cada vez)
+        // defPos(0) reinicia o contador de estado por token antes do ciclo
+        ln1->defPos(0);
         for(int t = 0; t < seq; t++) {
             ln1->prop(entrada + t*dim, bufLN1 + t*dim);
         }
@@ -139,6 +141,7 @@ struct BlocoTransformer : Camada {
         }
         // --- bloco FFN(Pre-LN) ---
         // LN2(bufRes1) -> bufLN2, por token
+        ln2->defPos(0);
         for(int t = 0; t < seq; t++) {
             ln2->prop(bufRes1 + t*dim, bufLN2 + t*dim);
         }
@@ -180,6 +183,9 @@ struct BlocoTransformer : Camada {
             ff1->retroprop(gBufFF2 + t*dimFF, gBufFF1 + t*dim);
         }
         // grad atraves de LN2, por token (Norm opera sobre [dim] único) -> gBufLN2
+        // defPos(0) garante que o estado lido em cada retroprop() corresponda
+        // ao token t certo (mesma ordem 0..seq-1 usada no prop)
+        ln2->defPos(0);
         for(int t = 0; t < seq; t++) {
             ln2->retroprop(gBufFF1 + t*dim, gBufLN2 + t*dim);
         }
@@ -189,15 +195,15 @@ struct BlocoTransformer : Camada {
         // gBufMHA reutilizado aqui temporariamente como "grad para bufRes1"
         for(int i = 0; i < dimSq; i++) { gBufMHA[i] = gradSaida[i] + gBufLN2[i];
         }
-
         // caminho de volta do bloco de atenção
         // bufRes1 = entrada + MHA(LN1(entrada))
-        // grad de bufRes1 → split para MHA e para entrada (resíduo)
+        // grad de bufRes1 -> split para MHA e para entrada (resíduo)
 
         // grad de MHA: gBufMHA -> gBufLN1 (grad de bufLN1)
         mha->retroprop(gBufMHA, gBufLN1);
 
-        // grad através de LN1, por token(Norm opera sobre[dim] unico) -> gBufFF1 reutilizado
+        // grad atraves de LN1, por token(Norm opera sobre[dim] unico) -> gBufFF1 reutilizado
+        ln1->defPos(0);
         for(int t = 0; t < seq; t++) {
             ln1->retroprop(gBufLN1 + t*dim, gBufFF1 + t*dim);
         }
@@ -210,13 +216,10 @@ struct BlocoTransformer : Camada {
             }
         }
     }
-
     // interface Camada
     // grupos(membro, setado no construtor) = MHA(4)+LN1(2)+LN2(2)+ff1(2)+ff2(2) = 12
-
     int numParams() override {
-        return mha->numParams() + ln1->numParams() + ln2->numParams()
-        + ff1->numParams() + ff2->numParams();
+        return mha->numParams() + ln1->numParams() + ln2->numParams() + ff1->numParams() + ff2->numParams();
     }
 
     void params(float** saida, int* tams) override {

@@ -1,13 +1,13 @@
 // biblis/modelo.h
-// Modelo completo: Embedding -> N x BlocoTransformer -> Densa(logits)
-//
+// modelo completo: Embedding -> N x BlocoTransformer -> Densa(logits)
+
 // prop():
 //   ids[seq] -> Embedding -> x0[seq*dim]
 //   x0 -> bloco[0] -> x1 -> bloco[1] -> ... -> bloco[N-1] -> xN[seq*dim]
 //   xN -> Densa(dim,vocab) por token -> logits[seq*vocab]
-//
+
 // retroprop(): caminho inverso, cross-entropy -> Densa -> blocos (ordem reversa) -> Embedding
-//
+
 // perda: cross-entropy padrao, softmax aplicado aqui(nao dentro da Densa final)
 #pragma once
 #include "camadas/camada.h"
@@ -31,7 +31,7 @@ struct Modelo {
     BlocoTransformer** blocos;
     Densa* saida;
 
-    // buffers de ativacao intermediaria: uma por "fronteira" entre camadas (nCamadas+1 no total)
+    // buffers de ativacao intermediaria: uma por "fronteira" entre camadas(nCamadas+1 no total)
     // ativ[0] = saida do embedding, ativ[i] = saida do bloco i-1, ativ[nCamadas] = entrada da Densa final
     float** ativ; // [nCamadas+1] ponteiros, cada um [seqMax*dim]
 
@@ -74,16 +74,22 @@ struct Modelo {
         totalCamadas = 1 + nCamadas + 1;
         todasCamadas = (Camada**)malloc(totalCamadas * sizeof(Camada*));
         todasCamadas[0] = emb;
-        for(int i = 0; i < nCamadas; i++) todasCamadas[1 + i] = blocos[i];
+        for(int i = 0; i < nCamadas; i++) { 
+            todasCamadas[1 + i] = blocos[i];
+        }
         todasCamadas[totalCamadas - 1] = saida;
     }
 
     ~Modelo() {
         delete emb;
-        for(int i = 0; i < nCamadas; i++) delete blocos[i];
+        for(int i = 0; i < nCamadas; i++) { 
+            delete blocos[i];
+        }
         free(blocos);
         delete saida;
-        for(int i = 0; i <= nCamadas; i++) { free(ativ[i]); free(gradAtiv[i]); }
+        for(int i = 0; i <= nCamadas; i++) { 
+            free(ativ[i]); free(gradAtiv[i]);
+        }
         free(ativ);
         free(gradAtiv);
         free(logits);
@@ -101,15 +107,17 @@ struct Modelo {
     void defSeq(int seq) {
         seqAtual = seq;
         emb->tamSeq = seq;
-        for(int i = 0; i < nCamadas; i++) blocos[i]->defSeq(seq);
+        for(int i = 0; i < nCamadas; i++) { 
+            blocos[i]->defSeq(seq);
+        }
     }
 
     void zerarGrad() {
-        for(int c = 0; c < totalCamadas; c++) todasCamadas[c]->zerarGrad();
+        for(int c = 0; c < totalCamadas; c++) {
+            todasCamadas[c]->zerarGrad();
+        }
     }
-
-    // prop: ids[seqAtual](int*, reinterpretado como float* pra bater com Embedding)
-    //       -> logits[seqAtual * vocab]
+    // prop: ids[seqAtual](int*, reinterpretado como float* pra bater com Embedding) -> logits[seqAtual * vocab]
     // chamador deve ter chamado defSeq(seq) antes
     void prop(const int* ids) {
         int seq = seqAtual;
@@ -119,49 +127,13 @@ struct Modelo {
         for(int i = 0; i < nCamadas; i++) {
             blocos[i]->prop(ativ[i], ativ[i + 1]);
         }
-        // Densa final: por token, dim -> vocab
+        // densa final: por token, dim -> vocab
         for(int t = 0; t < seq; t++) {
             saida->prop(ativ[nCamadas] + t * dim, logits + t * vocab);
         }
     }
-    // perdaCrossEntropy: aplica softmax sobre logits[t] e calcula -log(p[alvo[t]])
-    // alvos[seq]: id do token esperado em cada posicao
-    // preenche gradLogits(dL/dlogits) para uso em retroprop()
-    // retorna perda media sobre a sequencia
-    float perdaCrossEntropy(const int* alvos) {
-        int seq = seqAtual;
-        float perdaTotal = 0.0f;
-
-        for(int t = 0; t < seq; t++) {
-            float* lg = logits + t * vocab;
-            float* gl = gradLogits + t * vocab;
-
-            // softmax estavel
-            float mx = lg[0];
-            for(int v = 1; v < vocab; v++) {
-                if(lg[v] > mx) mx = lg[v];
-            }
-            float soma = 0.0f;
-            for(int v = 0; v < vocab; v++) {
-                gl[v] = expf(lg[v] - mx); // reaproveita gl como buffer temporario de exp
-                soma += gl[v];
-            }
-            float invSoma = 1.0f / soma;
-
-            int alvo = alvos[t];
-            for(int v = 0; v < vocab; v++) {
-                float p = gl[v] * invSoma; // probabilidade softmax
-                gl[v] = p - (v == alvo ? 1.0f : 0.0f); // dL/dlogit = p - onehot
-            }
-            float pAlvo = expf(lg[alvo] - mx) * invSoma;
-            // clamp evita log(0) por erro de arredondamento
-            if(pAlvo < 1e-9f) pAlvo = 1e-9f;
-            perdaTotal += -logf(pAlvo);
-        }
-        return perdaTotal / (float)seq;
-    }
     // retroprop: caminho inverso completo, a partir de gradLogits (ja preenchido
-    // por perdaCrossEntropy). Acumula gradientes em todas as camadas.
+    // por perda entropia cruzada). Acumula gradientes em todas as camadas.
     void retroprop() {
         int seq = seqAtual;
 
